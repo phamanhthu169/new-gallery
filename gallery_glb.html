@@ -1,0 +1,3071 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Gallery · Multi-Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Space+Mono:wght@400&family=Special+Gothic+Expanded+One&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg:        #0f0d0a;
+  --surface:   rgba(20,18,14,.92);
+  --border:    rgba(212,197,169,.18);
+  --border-hi: rgba(212,197,169,.55);
+  --gold:      #d4c5a9;
+  --gold-dim:  #7a6e5c;
+  --text-dim:  #555;
+  --accent:    #c8a96e;
+  --danger:    #b54a3a;
+  --success:   #6aaa7a;
+  --radius:    2px;
+  --font-ui:   'Space Mono', monospace;
+  --font-head: 'Cormorant Garamond', serif;
+}
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+#c { display:block; width:100%; height:600px; cursor:crosshair; }
+#c.walk-mode { cursor:grab; }
+#c.walk-mode:active { cursor:grabbing; }
+
+#wrap { position:relative; user-select:none; font-family:var(--font-ui); background:var(--bg); }
+
+#header {
+  position:absolute; top:0; left:0; right:160px; height:42px;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 16px;
+  background:linear-gradient(to bottom,rgba(15,13,10,.95) 0%,rgba(15,13,10,0) 100%);
+  z-index:10; pointer-events:none;
+}
+#gallery-title { font-family:var(--font-head); font-size:18px; font-weight:300; font-style:italic; color:var(--gold); letter-spacing:.12em; }
+#save-status { font-size:8px; letter-spacing:.15em; text-transform:uppercase; color:var(--text-dim); transition:color .3s; }
+#save-status.saved  { color:#6aaa7a; }
+#save-status.saving { color:var(--accent); }
+#save-status.error  { color:var(--danger); }
+
+/* ── TOOLBAR ── */
+#ui { position:absolute; top:10px; left:calc(50% - 74px - 74px); transform:translateX(-50%); display:flex; gap:5px; z-index:10; flex-wrap:wrap; max-width:700px; }
+
+.btn {
+  background: linear-gradient(to bottom,rgba(250,172,255,.5) 0%,rgba(30,50,120,.4) 50%,rgba(6,69,255,.6) 98%);
+  border: 1px solid rgba(200,150,255,.5);
+  box-shadow: 0px 2px 6px 0px rgba(40,52,255,.5);
+  padding:7px 12px; font-size:9px;
+  font-family:'Special Gothic Expanded One',sans-serif; font-weight:400; line-height:1.2;
+  letter-spacing:.08em; text-transform:uppercase; cursor:pointer;
+  transition:all .2s; border-radius:var(--radius); position:relative; white-space:nowrap;
+  color: #f0e0ff;
+}
+.btn:hover, .btn.active {
+  background: linear-gradient(to bottom,rgba(250,172,255,.75) 0%,rgba(65,112,255,.3) 50%,rgba(6,69,255,.85) 98%);
+  border-color: rgba(226,147,255,.9);
+  color: #fff;
+  box-shadow: 0px 3px 10px 0px rgba(40,52,255,.7);
+}
+.btn.danger:hover {
+  background: linear-gradient(to bottom,rgba(255,100,100,.35) 0%,rgba(181,74,58,.1) 50%,rgba(181,74,58,.5) 98%);
+  border-color: rgba(255,120,120,.6);
+  color: #ffcccc;
+  box-shadow: 0px 2px 6px 0px rgba(181,74,58,.5);
+}
+
+.btn[data-tip]::after {
+  content:attr(data-tip); position:absolute; bottom:-26px; left:50%; transform:translateX(-50%);
+  background:rgba(20,18,14,.95); color:var(--gold-dim); font-size:7px; letter-spacing:.1em;
+  padding:3px 7px; border:.5px solid var(--border); white-space:nowrap;
+  pointer-events:none; opacity:0; transition:opacity .2s; border-radius:var(--radius);
+}
+.btn[data-tip]:hover::after { opacity:1; }
+
+/* ── INFO BAR ── */
+#info {
+  position:absolute; bottom:14px; left:50%;
+  transform:translateX(calc(-50% - 80px));
+  background:rgba(20,18,14,.8); color:var(--gold-dim); border:.5px solid var(--border);
+  padding:6px 16px; font-size:8px; letter-spacing:.13em; text-transform:uppercase;
+  pointer-events:none; white-space:nowrap; border-radius:var(--radius); backdrop-filter:blur(4px);
+}
+
+/* ── PANEL ── */
+#panel {
+  position:absolute; right:0; top:0; bottom:0; width:160px;
+  background:rgba(15,13,12,.97); border-left:.5px solid var(--border);
+  display:flex; flex-direction:column; z-index:10; overflow-y:auto;
+}
+#panel::-webkit-scrollbar { width:3px; }
+#panel::-webkit-scrollbar-thumb { background:rgba(212,197,169,.15); }
+
+.ph { color:var(--gold); font-family:var(--font-head); font-size:13px; font-style:italic; font-weight:300; letter-spacing:.1em; padding:12px 12px 8px; border-bottom:.5px solid var(--border); }
+.sl { color:var(--text-dim); font-size:7px; letter-spacing:.18em; text-transform:uppercase; padding:9px 12px 4px; }
+
+.tg { display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:4px 10px; }
+.thumb { aspect-ratio:4/3; cursor:pointer; border:1.5px solid transparent; transition:border-color .2s; display:block; width:100%; border-radius:var(--radius); }
+.thumb:hover, .thumb.sel { border-color:var(--gold); }
+
+.uz {
+  margin:5px 10px; padding:10px 5px; text-align:center; cursor:pointer;
+  background-image:linear-gradient(to bottom,rgba(250,172,255,.676) 0%,rgba(65,112,255,0) 50%,rgba(6,69,255,.75) 98%);
+  background-color:rgba(20,18,14,.6); color:#e8d8ff;
+  border:1px solid transparent;
+  border-image:linear-gradient(to bottom,rgba(226,147,255,1) 0%,rgba(154,166,255,0) 100%) 1;
+  box-shadow:0px 2px 2px 0px rgba(40,52,255,.616);
+  font-size:10px; letter-spacing:.1em; text-transform:uppercase; line-height:1.8;
+  transition:all .2s; border-radius:var(--radius);
+}
+.uz:hover { box-shadow:0px 3px 8px 0px rgba(40,52,255,.7); }
+
+.uw { padding:3px 10px; }
+.uth { width:100%; aspect-ratio:4/3; object-fit:cover; display:block; cursor:pointer; border:1.5px solid transparent; transition:border-color .2s; margin-bottom:2px; background:#1a1814; border-radius:var(--radius); }
+.uth:hover, .uth.sel { border-color:var(--gold); }
+.utl { font-size:7px; color:var(--text-dim); letter-spacing:.06em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:5px; }
+.model-thumb { width:100%; aspect-ratio:1; display:flex; align-items:center; justify-content:center; font-size:22px; cursor:pointer; border:1.5px solid transparent; transition:border-color .2s; margin-bottom:2px; background:#111; border-radius:var(--radius); }
+.model-thumb:hover, .model-thumb.sel { border-color:var(--gold); }
+
+#hint { color:var(--text-dim); font-size:7px; letter-spacing:.09em; text-transform:uppercase; padding:10px 12px; line-height:2; border-top:.5px solid rgba(212,197,169,.08); margin-top:auto; }
+
+/* ── LIGHT PANEL ── */
+#light-panel {
+  position:absolute; left:10px; top:60px;
+  width:220px; background:rgba(15,13,12,.97);
+  border:.5px solid var(--border); border-radius:4px;
+  z-index:20; padding:12px; display:none; flex-direction:column; gap:10px;
+}
+#light-panel.open { display:flex; }
+#light-panel h3 { color:var(--gold); font-family:var(--font-head); font-size:13px; font-style:italic; font-weight:300; letter-spacing:.1em; border-bottom:.5px solid var(--border); padding-bottom:6px; }
+.lp-row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.lp-label { color:var(--gold-dim); font-size:7px; letter-spacing:.12em; text-transform:uppercase; flex-shrink:0; }
+.lp-range { flex:1; -webkit-appearance:none; height:2px; background:rgba(212,197,169,.2); border-radius:1px; outline:none; cursor:pointer; }
+.lp-range::-webkit-slider-thumb { -webkit-appearance:none; width:10px; height:10px; border-radius:50%; background:var(--gold); cursor:pointer; }
+.lp-color { width:28px; height:18px; border:none; border-radius:2px; cursor:pointer; background:none; padding:0; }
+.lp-sep { border:none; border-top:.5px solid rgba(212,197,169,.1); margin:2px 0; }
+#spot-list { display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto; }
+#spot-list::-webkit-scrollbar { width:2px; }
+#spot-list::-webkit-scrollbar-thumb { background:rgba(212,197,169,.1); }
+.spot-item { background:rgba(212,197,169,.05); border:.5px solid var(--border); border-radius:3px; padding:6px 8px; }
+.spot-item-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+.spot-name { color:var(--gold-dim); font-size:7px; letter-spacing:.1em; }
+.spot-del { background:rgba(181,74,58,.6); color:#fff; border:none; font-size:7px; cursor:pointer; padding:2px 5px; border-radius:1px; }
+.spot-del:hover { background:rgba(181,74,58,.9); }
+
+/* ── ARTWORK POPUP ── */
+#artwork-popup {
+  position:absolute; z-index:30;
+  background:rgba(15,13,12,.97); border:.5px solid var(--border);
+  border-radius:4px; padding:16px; width:260px;
+  display:none; flex-direction:column; gap:10px;
+}
+#artwork-popup.open { display:flex; }
+#artwork-popup h3 { color:var(--gold); font-family:var(--font-head); font-size:14px; font-style:italic; font-weight:300; }
+.popup-field { display:flex; flex-direction:column; gap:3px; }
+.popup-field label { color:var(--text-dim); font-size:7px; letter-spacing:.14em; text-transform:uppercase; }
+.popup-field input, .popup-field textarea {
+  background:rgba(212,197,169,.05); border:.5px solid var(--border);
+  color:var(--gold); font-family:var(--font-ui); font-size:9px;
+  padding:5px 8px; border-radius:2px; outline:none; resize:vertical;
+}
+.popup-field input:focus, .popup-field textarea:focus { border-color:var(--gold-dim); }
+.popup-btns { display:flex; gap:6px; justify-content:flex-end; }
+.popup-btn { padding:5px 10px; font-size:8px; font-family:var(--font-ui); cursor:pointer; border-radius:2px; letter-spacing:.08em; border:none; }
+.popup-btn.save { background:rgba(106,170,122,.2); color:#6aaa7a; border:.5px solid rgba(106,170,122,.4); }
+.popup-btn.cancel { background:rgba(212,197,169,.08); color:var(--gold-dim); border:.5px solid var(--border); }
+
+/* ── INFO DISPLAY POPUP ── */
+#info-popup {
+  position:absolute; z-index:30;
+  background:rgba(15,13,12,.97); border:.5px solid var(--border);
+  border-radius:4px; padding:16px; width:240px;
+  display:none; flex-direction:column; gap:8px;
+  pointer-events:auto;
+}
+#info-popup.open { display:flex; }
+#info-popup .ip-title { color:var(--gold); font-family:var(--font-head); font-size:16px; font-style:italic; font-weight:300; }
+#info-popup .ip-artist { color:var(--accent); font-size:8px; letter-spacing:.12em; }
+#info-popup .ip-year { color:var(--text-dim); font-size:8px; letter-spacing:.1em; }
+#info-popup .ip-desc { color:rgba(212,197,169,.7); font-size:8px; line-height:1.8; letter-spacing:.06em; }
+#info-popup .ip-price { color:var(--accent); font-size:9px; letter-spacing:.1em; font-weight:400; margin-top:2px; }
+#info-popup .ip-close { align-self:flex-end; background:none; border:.5px solid var(--border); color:var(--gold-dim); font-family:var(--font-ui); font-size:7px; padding:3px 8px; cursor:pointer; border-radius:2px; letter-spacing:.1em; }
+#info-popup .ip-close:hover { border-color:var(--gold); color:var(--gold); }
+
+/* ── LOADING ── */
+#loading-overlay { position:absolute; inset:0; background:rgba(15,13,10,.88); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:20; backdrop-filter:blur(2px); }
+#loading-overlay.show { display:flex; }
+.ld-txt { color:var(--gold); font-size:9px; letter-spacing:.22em; text-transform:uppercase; margin-bottom:16px; }
+.ld-bar { width:140px; height:1px; background:rgba(212,197,169,.12); }
+.ld-fill { height:100%; background:var(--gold); width:0%; transition:width .3s; }
+
+/* ── TOAST ── */
+#toast { position:absolute; bottom:50px; left:50%; transform:translateX(calc(-50% - 80px)) translateY(20px); background:rgba(20,18,14,.96); border:.5px solid var(--border); color:var(--gold); font-size:9px; letter-spacing:.14em; text-transform:uppercase; padding:8px 18px; border-radius:var(--radius); pointer-events:none; opacity:0; transition:opacity .3s,transform .3s; z-index:30; backdrop-filter:blur(4px); white-space:nowrap; }
+#toast.show { opacity:1; transform:translateX(calc(-50% - 80px)) translateY(0); }
+#toast.success { border-color:#6aaa7a; color:#6aaa7a; }
+#toast.error   { border-color:var(--danger); color:var(--danger); }
+
+/* ── ROOM SWITCHER BAR ── */
+#room-switcher {
+  position:absolute; top:52px; left:50%; transform:translateX(calc(-50% - 80px));
+  display:flex; gap:5px; z-index:12; align-items:center;
+}
+.rsw-btn {
+  background:rgba(15,13,12,.88);
+  border:.5px solid rgba(212,197,169,.25);
+  color:var(--gold-dim);
+  font-family:var(--font-ui); font-size:8px; letter-spacing:.12em; text-transform:uppercase;
+  padding:5px 13px; cursor:pointer; border-radius:var(--radius);
+  transition:all .2s; white-space:nowrap; backdrop-filter:blur(4px);
+}
+.rsw-btn:hover { border-color:var(--gold-dim); color:var(--gold); }
+.rsw-btn.rsw-active {
+  background:rgba(200,169,110,.18);
+  border-color:var(--accent);
+  color:var(--accent);
+  box-shadow:0 0 8px rgba(200,169,110,.25);
+}
+.rsw-sep { width:.5px; height:16px; background:rgba(212,197,169,.15); flex-shrink:0; }
+
+/* ── DOOR MODE TOOLTIP ── */
+#door-tooltip {
+  position:fixed; z-index:999; pointer-events:none;
+  background:rgba(15,13,12,.95); border:.5px solid var(--accent);
+  color:var(--accent); font-family:var(--font-ui); font-size:9px;
+  letter-spacing:.12em; text-transform:uppercase;
+  padding:6px 12px; border-radius:var(--radius);
+  white-space:nowrap; opacity:0; transition:opacity .15s;
+  box-shadow:0 2px 8px rgba(200,169,110,.3);
+}
+#door-tooltip.show { opacity:1; }
+
+
+.remove-btn { position:absolute; top:2px; right:2px; width:16px; height:16px; background:rgba(181,74,58,.85); color:#fff; font-size:8px; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .2s; border-radius:1px; }
+.uw > .item-wrap:hover .remove-btn { opacity:1; }
+.item-wrap { position:relative; }
+
+/* ── FLOOR PLAN ── */
+#floorplan {
+  position:absolute; bottom:14px; left:14px; z-index:15;
+  background:rgba(12,10,8,.92); border:.5px solid var(--border);
+  border-radius:3px; transition:all .3s;
+}
+#floorplan.mini { width:140px; height:140px; }
+#floorplan.full {
+  left:50%; top:50%; transform:translate(-50%,-50%);
+  width:500px; height:500px;
+}
+#floorplan-canvas { width:100%; height:100%; }
+#floorplan-header {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:4px 8px; border-bottom:.5px solid rgba(212,197,169,.1);
+  font-size:7px; letter-spacing:.15em; text-transform:uppercase; color:var(--gold-dim);
+}
+#floorplan-header button {
+  background:none; border:none; color:var(--gold-dim); cursor:pointer; font-size:10px; padding:0 2px;
+  font-family:var(--font-ui);
+}
+#floorplan-header button:hover { color:var(--gold); }
+
+/* ── ROOM MANAGER PANEL ── */
+#room-panel {
+  position:absolute; left:10px; top:60px;
+  width:260px; background:rgba(15,13,12,.97);
+  border:.5px solid var(--border); border-radius:4px;
+  z-index:20; padding:12px; display:none; flex-direction:column; gap:10px;
+  max-height:480px; overflow-y:auto;
+}
+#room-panel.open { display:flex; }
+#room-panel::-webkit-scrollbar { width:3px; }
+#room-panel::-webkit-scrollbar-thumb { background:rgba(212,197,169,.1); }
+#room-panel h3 { color:var(--gold); font-family:var(--font-head); font-size:13px; font-style:italic; font-weight:300; letter-spacing:.1em; border-bottom:.5px solid var(--border); padding-bottom:6px; }
+
+.rp-section { font-size:7px; letter-spacing:.15em; text-transform:uppercase; color:var(--text-dim); margin-top:4px; }
+.rp-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:4px; }
+.rp-label { color:var(--gold-dim); font-size:8px; letter-spacing:.1em; flex-shrink:0; min-width:70px; }
+.rp-input { flex:1; background:rgba(212,197,169,.05); border:.5px solid var(--border); color:var(--gold); font-family:var(--font-ui); font-size:8px; padding:4px 6px; border-radius:2px; outline:none; }
+.rp-input:focus { border-color:var(--gold-dim); }
+.rp-input[type=number] { width:60px; flex:none; }
+.rp-select { flex:1; background:rgba(20,18,14,.9); border:.5px solid var(--border); color:var(--gold); font-family:var(--font-ui); font-size:8px; padding:4px 6px; border-radius:2px; outline:none; cursor:pointer; }
+.rp-btn {
+  background:rgba(212,197,169,.08); border:.5px solid var(--border); color:var(--gold-dim);
+  font-family:var(--font-ui); font-size:8px; padding:5px 10px; cursor:pointer; border-radius:2px;
+  letter-spacing:.06em; transition:all .2s; white-space:nowrap;
+}
+.rp-btn:hover { background:rgba(212,197,169,.18); color:var(--gold); border-color:var(--gold-dim); }
+.rp-btn.primary { background:rgba(200,169,110,.15); border-color:rgba(200,169,110,.5); color:var(--accent); }
+.rp-btn.primary:hover { background:rgba(200,169,110,.25); }
+.rp-btn.danger { border-color:rgba(181,74,58,.4); color:rgba(181,74,58,.8); }
+.rp-btn.danger:hover { background:rgba(181,74,58,.15); color:var(--danger); }
+.rp-sep { border:none; border-top:.5px solid rgba(212,197,169,.1); margin:4px 0; }
+
+.room-item {
+  background:rgba(212,197,169,.04); border:.5px solid var(--border);
+  border-radius:3px; padding:8px;
+}
+.room-item.active-room { border-color:var(--accent); background:rgba(200,169,110,.06); }
+.room-item-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+.room-name { color:var(--gold); font-size:9px; letter-spacing:.08em; }
+.room-floor-badge { background:rgba(200,169,110,.15); color:var(--accent); font-size:6px; letter-spacing:.1em; padding:1px 5px; border-radius:10px; border:.5px solid rgba(200,169,110,.3); }
+.room-dims { color:var(--text-dim); font-size:7px; letter-spacing:.08em; margin-bottom:4px; }
+.room-actions { display:flex; gap:4px; flex-wrap:wrap; }
+.room-actions .rp-btn { padding:3px 7px; font-size:7px; }
+
+.dir-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:3px; width:100%; }
+.dir-btn {
+  background:rgba(212,197,169,.06); border:.5px solid rgba(212,197,169,.15);
+  color:var(--gold-dim); font-family:var(--font-ui); font-size:9px;
+  padding:6px; cursor:pointer; border-radius:2px; text-align:center;
+  transition:all .2s;
+}
+.dir-btn:hover { background:rgba(200,169,110,.15); color:var(--accent); border-color:var(--accent); }
+.dir-btn:disabled { opacity:.3; cursor:not-allowed; }
+.dir-center { background:rgba(200,169,110,.08); color:var(--accent); border-color:rgba(200,169,110,.3); cursor:default; font-size:7px; letter-spacing:.08em; display:flex; align-items:center; justify-content:center; }
+
+/* ── TRANSFORM HUD ── */
+#transform-hud {
+  position:absolute; bottom:14px; left:50%;
+  transform:translateX(calc(-50% - 80px));
+  background:rgba(15,13,12,.95); border:.5px solid var(--border);
+  border-radius:3px; padding:8px 12px;
+  display:none; gap:8px; align-items:center; z-index:15;
+  flex-wrap:wrap; max-width:340px;
+}
+#transform-hud.open { display:flex; }
+.th-label { color:var(--text-dim); font-size:7px; letter-spacing:.12em; text-transform:uppercase; }
+.th-val { color:var(--gold); font-size:8px; min-width:30px; text-align:center; }
+.th-btn { background:rgba(212,197,169,.08); border:.5px solid var(--border); color:var(--gold-dim); font-size:8px; padding:3px 7px; cursor:pointer; border-radius:2px; font-family:var(--font-ui); letter-spacing:.06em; white-space:nowrap; }
+.th-btn:hover { background:rgba(212,197,169,.18); color:var(--gold); }
+.th-btn.danger { border-color:rgba(181,74,58,.4); color:rgba(181,74,58,.8); }
+.th-btn.danger:hover { background:rgba(181,74,58,.15); color:var(--danger); }
+.th-sep { width:.5px; height:20px; background:rgba(212,197,169,.1); }
+
+/* ── CHAT ── */
+#chat-toggle {
+  position: absolute; bottom: 20px; right: 180px; z-index: 20;
+  background: rgba(15,13,12,.92); border: .5px solid rgba(212,197,169,.35);
+  color: var(--gold); font-family: var(--font-ui); font-size: 9px;
+  letter-spacing: .12em; text-transform: uppercase; padding: 7px 13px;
+  cursor: pointer; border-radius: var(--radius); transition: all .2s;
+  display: flex; align-items: center; gap: 6px;
+}
+#chat-toggle:hover { border-color: rgba(212,197,169,.65); color: #fff; }
+#chat-unread { background:var(--accent); color:#0f0d0a; font-size:8px; border-radius:50%; width:14px; height:14px; display:none; align-items:center; justify-content:center; font-weight:bold; }
+#chat-unread.show { display:flex; }
+#chat-box { position:absolute; bottom:58px; right:180px; width:280px; background:rgba(12,10,8,.96); border:.5px solid rgba(212,197,169,.22); border-radius:4px; z-index:20; font-family:var(--font-ui); font-size:11px; display:flex; flex-direction:column; overflow:hidden; }
+#chat-box.chat-hidden { display:none; }
+#chat-header { padding:8px 12px; background:rgba(212,197,169,.05); border-bottom:.5px solid rgba(212,197,169,.12); color:var(--gold-dim); font-size:8px; letter-spacing:.16em; text-transform:uppercase; display:flex; justify-content:space-between; align-items:center; }
+#chat-username-display { color:var(--accent); cursor:pointer; transition:color .2s; }
+#chat-username-display:hover { color:var(--gold); }
+#chat-messages { height:160px; overflow-y:auto; padding:8px 10px; display:flex; flex-direction:column; gap:5px; }
+#chat-messages::-webkit-scrollbar { width:2px; }
+#chat-messages::-webkit-scrollbar-thumb { background:rgba(212,197,169,.12); }
+.chat-msg { line-height:1.5; word-break:break-word; }
+.chat-msg .msg-name { color:var(--accent); font-size:9px; margin-right:4px; }
+.chat-msg.is-me .msg-name { color:#8ab4ff; }
+.chat-msg .msg-text { color:rgba(212,197,169,.8); font-size:10px; }
+#chat-input-wrap { display:flex; gap:0; border-top:.5px solid rgba(212,197,169,.1); }
+#chat-input { flex:1; padding:7px 10px; font-size:10px; font-family:var(--font-ui); background:transparent; border:none; color:var(--gold); outline:none; letter-spacing:.05em; }
+#chat-input::placeholder { color:var(--text-dim); }
+#chat-send { padding:7px 12px; cursor:pointer; background:rgba(212,197,169,.07); border:none; border-left:.5px solid rgba(212,197,169,.1); color:var(--gold-dim); font-family:var(--font-ui); font-size:10px; letter-spacing:.05em; transition:all .2s; }
+#chat-send:hover { background:rgba(212,197,169,.15); color:var(--gold); }
+
+/* ── ROOM LABEL ── */
+.room-label-3d { position:absolute; pointer-events:none; color:rgba(212,197,169,.5); font-size:7px; letter-spacing:.15em; text-transform:uppercase; font-family:var(--font-ui); }
+
+/* ── WALL STYLE PANEL ── */
+#wall-style-panel {
+  position:absolute; left:10px; top:60px;
+  width:260px; background:rgba(15,13,12,.97);
+  border:.5px solid var(--border); border-radius:4px;
+  z-index:20; padding:12px; display:none; flex-direction:column; gap:10px;
+  max-height:520px; overflow-y:auto;
+}
+#wall-style-panel.open { display:flex; }
+#wall-style-panel::-webkit-scrollbar { width:3px; }
+#wall-style-panel::-webkit-scrollbar-thumb { background:rgba(212,197,169,.1); }
+#wall-style-panel h3 { color:var(--gold); font-family:var(--font-head); font-size:13px; font-style:italic; font-weight:300; letter-spacing:.1em; border-bottom:.5px solid var(--border); padding-bottom:6px; }
+.ws-section { font-size:7px; letter-spacing:.15em; text-transform:uppercase; color:var(--text-dim); margin-top:4px; }
+.ws-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:6px; }
+.ws-label { color:var(--gold-dim); font-size:8px; letter-spacing:.1em; flex-shrink:0; min-width:80px; }
+.ws-color { width:36px; height:22px; border:none; border-radius:2px; cursor:pointer; background:none; padding:0; border:.5px solid var(--border); }
+.ws-btn {
+  background:rgba(212,197,169,.08); border:.5px solid var(--border); color:var(--gold-dim);
+  font-family:var(--font-ui); font-size:8px; padding:5px 10px; cursor:pointer; border-radius:2px;
+  letter-spacing:.06em; transition:all .2s; white-space:nowrap;
+}
+.ws-btn:hover { background:rgba(212,197,169,.18); color:var(--gold); border-color:var(--gold-dim); }
+.ws-btn.primary { background:rgba(200,169,110,.15); border-color:rgba(200,169,110,.5); color:var(--accent); }
+.ws-btn.primary:hover { background:rgba(200,169,110,.25); }
+.ws-btn.danger { border-color:rgba(181,74,58,.4); color:rgba(181,74,58,.8); }
+.ws-btn.danger:hover { background:rgba(181,74,58,.15); color:var(--danger); }
+.ws-sep { border:none; border-top:.5px solid rgba(212,197,169,.1); margin:4px 0; }
+.ws-upload-zone {
+  margin:4px 0; padding:10px 8px; text-align:center; cursor:pointer;
+  background-image:linear-gradient(to bottom,rgba(250,172,255,.4) 0%,rgba(30,50,120,.3) 50%,rgba(6,69,255,.5) 98%);
+  background-color:rgba(20,18,14,.6); color:#e8d8ff;
+  border:1px solid transparent;
+  border-image:linear-gradient(to bottom,rgba(226,147,255,.8) 0%,rgba(154,166,255,0) 100%) 1;
+  font-size:9px; letter-spacing:.1em; text-transform:uppercase; line-height:1.8;
+  transition:all .2s; border-radius:var(--radius);
+}
+.ws-upload-zone:hover { box-shadow:0px 3px 8px 0px rgba(40,52,255,.6); }
+.wallpaper-preview-wrap { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+.wallpaper-thumb-item { position:relative; cursor:pointer; }
+.wallpaper-thumb { width:54px; height:40px; object-fit:cover; border-radius:2px; border:1.5px solid transparent; transition:border-color .2s; display:block; }
+.wallpaper-thumb:hover, .wallpaper-thumb.sel { border-color:var(--gold); }
+.wallpaper-remove { position:absolute; top:-4px; right:-4px; width:14px; height:14px; background:rgba(181,74,58,.9); color:#fff; font-size:7px; border:none; cursor:pointer; border-radius:50%; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .2s; line-height:1; }
+.wallpaper-thumb-item:hover .wallpaper-remove { opacity:1; }
+.ws-select { flex:1; background:rgba(20,18,14,.9); border:.5px solid var(--border); color:var(--gold); font-family:var(--font-ui); font-size:8px; padding:4px 6px; border-radius:2px; outline:none; cursor:pointer; }
+.ws-range { flex:1; -webkit-appearance:none; height:2px; background:rgba(212,197,169,.2); border-radius:1px; outline:none; cursor:pointer; }
+.ws-range::-webkit-slider-thumb { -webkit-appearance:none; width:10px; height:10px; border-radius:50%; background:var(--gold); cursor:pointer; }
+
+/* ── PATH CREATOR PANEL ── */
+#path-panel {
+  position:absolute; left:10px; top:60px;
+  width:260px; background:rgba(15,13,12,.97);
+  border:.5px solid var(--border); border-radius:4px;
+  z-index:20; padding:12px; display:none; flex-direction:column; gap:10px;
+  max-height:500px; overflow-y:auto;
+}
+#path-panel.open { display:flex; }
+#path-panel::-webkit-scrollbar { width:3px; }
+#path-panel::-webkit-scrollbar-thumb { background:rgba(212,197,169,.1); }
+#path-panel h3 { color:var(--gold); font-family:var(--font-head); font-size:13px; font-style:italic; font-weight:300; letter-spacing:.1em; border-bottom:.5px solid var(--border); padding-bottom:6px; }
+.pp-section { font-size:7px; letter-spacing:.15em; text-transform:uppercase; color:var(--text-dim); margin-top:4px; }
+.pp-hint { font-size:7px; color:var(--text-dim); letter-spacing:.08em; line-height:1.9; margin-top:2px; }
+.pp-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:6px; }
+.pp-label { color:var(--gold-dim); font-size:8px; letter-spacing:.1em; flex-shrink:0; min-width:80px; }
+.pp-input { flex:1; background:rgba(212,197,169,.05); border:.5px solid var(--border); color:var(--gold); font-family:var(--font-ui); font-size:8px; padding:4px 6px; border-radius:2px; outline:none; }
+.pp-input:focus { border-color:var(--gold-dim); }
+.pp-btn {
+  background:rgba(212,197,169,.08); border:.5px solid var(--border); color:var(--gold-dim);
+  font-family:var(--font-ui); font-size:8px; padding:5px 10px; cursor:pointer; border-radius:2px;
+  letter-spacing:.06em; transition:all .2s; white-space:nowrap;
+}
+.pp-btn:hover { background:rgba(212,197,169,.18); color:var(--gold); border-color:var(--gold-dim); }
+.pp-btn.primary { background:rgba(200,169,110,.15); border-color:rgba(200,169,110,.5); color:var(--accent); }
+.pp-btn.primary:hover { background:rgba(200,169,110,.25); }
+.pp-btn.danger { border-color:rgba(181,74,58,.4); color:rgba(181,74,58,.8); }
+.pp-btn.danger:hover { background:rgba(181,74,58,.15); color:var(--danger); }
+.pp-sep { border:none; border-top:.5px solid rgba(212,197,169,.1); margin:4px 0; }
+#path-waypoints { display:flex; flex-direction:column; gap:5px; max-height:160px; overflow-y:auto; margin-top:4px; }
+#path-waypoints::-webkit-scrollbar { width:2px; }
+#path-waypoints::-webkit-scrollbar-thumb { background:rgba(212,197,169,.1); }
+.wp-item {
+  display:flex; align-items:center; gap:6px;
+  background:rgba(212,197,169,.04); border:.5px solid var(--border);
+  border-radius:2px; padding:5px 8px; cursor:grab;
+}
+.wp-item.wp-active { border-color:var(--accent); background:rgba(200,169,110,.08); }
+.wp-item.wp-drag-over { border-color:rgba(100,160,255,.6); }
+.wp-index { color:var(--accent); font-size:8px; min-width:16px; }
+.wp-coords { color:var(--gold-dim); font-size:7px; letter-spacing:.05em; flex:1; }
+.wp-del { background:rgba(181,74,58,.6); color:#fff; border:none; font-size:7px; cursor:pointer; padding:1px 5px; border-radius:1px; flex-shrink:0; }
+.wp-del:hover { background:rgba(181,74,58,.9); }
+
+/* WAYPOINT NAV TOOLTIP */
+#wp-nav-tip {
+  position:absolute; left:50%; transform:translateX(calc(-50% - 80px));
+  top:50px; z-index:25; pointer-events:none;
+  background:rgba(15,13,12,.94); border:.5px solid var(--accent);
+  border-radius:4px; padding:8px 18px;
+  color:var(--accent); font-family:var(--font-ui);
+  font-size:8px; letter-spacing:.15em; text-transform:uppercase;
+  display:none; align-items:center; gap:8px;
+}
+#wp-nav-tip.show { display:flex; }
+#wp-nav-tip .wp-tip-num { color:#fff; font-size:14px; font-family:var(--font-head); font-style:italic; }
+#wp-nav-tip .wp-tip-label { color:var(--gold-dim); font-size:7px; }
+#path-walk-hint {
+  position:absolute; bottom:80px; left:50%;
+  transform:translateX(calc(-50% - 80px));
+  color:var(--gold-dim); font-size:7px; letter-spacing:.12em;
+  text-transform:uppercase; pointer-events:none;
+  opacity:0; transition:opacity .4s; text-align:center;
+}
+#path-walk-hint.show { opacity:1; }
+
+/* ── PATH NAV BAR ── */
+#path-nav-bar {
+  position:absolute; bottom:50px; left:50%;
+  transform:translateX(calc(-50% - 80px));
+  background:rgba(15,13,12,.94); border:.5px solid var(--accent);
+  border-radius:4px; padding:6px 10px;
+  display:none; align-items:center; gap:8px; z-index:25;
+  font-family:var(--font-ui); backdrop-filter:blur(4px);
+}
+#path-nav-bar.show { display:flex; }
+.pnb-arrow {
+  background:rgba(200,169,110,.12); border:.5px solid rgba(200,169,110,.4);
+  color:var(--accent); font-size:14px; width:28px; height:28px;
+  cursor:pointer; border-radius:3px; display:flex; align-items:center; justify-content:center;
+  transition:all .2s; flex-shrink:0; line-height:1;
+}
+.pnb-arrow:hover { background:rgba(200,169,110,.28); border-color:var(--accent); color:#fff; }
+.pnb-arrow:disabled { opacity:.3; cursor:not-allowed; }
+#pnb-info { display:flex; flex-direction:column; align-items:center; min-width:90px; }
+#pnb-num { color:var(--accent); font-size:11px; letter-spacing:.1em; font-family:var(--font-head); font-style:italic; }
+#pnb-label { color:var(--gold-dim); font-size:7px; letter-spacing:.1em; text-transform:uppercase; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px; }
+#pnb-close { background:none; border:.5px solid rgba(212,197,169,.15); color:var(--text-dim); font-size:9px; cursor:pointer; border-radius:2px; padding:2px 6px; letter-spacing:.08em; margin-left:2px; transition:all .2s; }
+#pnb-close:hover { border-color:var(--border-hi); color:var(--gold-dim); }
+</style>
+</head>
+<body style="background:#0f0d0a;">
+<div id="wrap">
+  <canvas id="c"></canvas>
+
+  <div id="header">
+    <span id="gallery-title">Gallery · Studio 3D</span>
+    <span id="save-status">—</span>
+  </div>
+
+  <!-- Toolbar -->
+  <div id="ui">
+    <button class="btn active" id="btn-walk"   data-tip="W A S D để di chuyển">🚶 Walk</button>
+    <button class="btn"        id="btn-place"  data-tip="Click tường/sàn để đặt">📌 Place</button>
+    <button class="btn"        id="btn-select" data-tip="Click tranh để chỉnh sửa">✦ Select</button>
+    <button class="btn"        id="btn-wall"   data-tip="Màu tường & giấy dán tường">🎨 Tường</button>
+    <button class="btn"        id="btn-light"  data-tip="Điều chỉnh ánh sáng">💡 Light</button>
+    <button class="btn"        id="btn-door-mode" data-tip="Hover tường → click để thêm cửa thông">🚪 Cửa</button>
+    <button class="btn"        id="btn-rooms"  data-tip="Thêm phòng / tầng / cửa">🏛 Rooms</button>
+    <button class="btn"        id="btn-path"   data-tip="Tạo lộ trình tự động">🛤 Path</button>
+    <button class="btn danger" id="btn-reset"  data-tip="Xoá tất cả">↺ Reset</button>
+    <button class="btn"        id="btn-save"   data-tip="Lưu vào database">💾 Save</button>
+    <button class="btn"        id="btn-cam"    data-tip="Reset camera">⌖ Cam</button>
+  </div>
+
+  <!-- Room Switcher Bar -->
+  <div id="room-switcher"></div>
+
+  <!-- Panel bên phải -->
+  <div id="panel">
+    <div class="ph">Tác phẩm</div>
+    <div class="sl">Upload ảnh / video</div>
+    <div class="uz" id="uz-img" onclick="document.getElementById('fi-img').click()">+ JPG · PNG · MP4</div>
+    <input type="file" id="fi-img" accept="image/*,video/*" multiple style="display:none">
+    <div class="uw" id="uw-img"></div>
+    <div class="sl">Upload model 3D</div>
+    <div class="uz" id="uz-3d" onclick="document.getElementById('fi-3d').click()">+ GLB · GLTF · OBJ</div>
+    <input type="file" id="fi-3d" accept=".glb,.gltf,.obj" multiple style="display:none">
+    <div class="uw" id="uw-3d"></div>
+    <div id="hint">Chọn tác phẩm<br>→ bật Place<br>→ click sàn/tường<br><br>🏛 Rooms → thêm<br>phòng, cầu thang<br>cửa thông</div>
+  </div>
+
+  <!-- Door Mode Tooltip -->
+  <div id="door-tooltip">🚪 Click để thêm cửa</div>
+
+  <!-- Light Panel -->
+  <div id="light-panel">
+    <h3>💡 Ánh sáng</h3>
+    <div class="lp-row">
+      <span class="lp-label">Cường độ tổng</span>
+      <input type="range" class="lp-range" id="amb-intensity" min="0" max="3" step="0.05" value="1.2">
+      <span class="th-val" id="amb-val">1.2</span>
+    </div>
+    <div class="lp-row">
+      <span class="lp-label">Màu ánh sáng</span>
+      <input type="color" class="lp-color" id="amb-color" value="#fff4e0">
+    </div>
+    <hr class="lp-sep">
+    <div class="lp-row">
+      <span class="lp-label">Đèn nền (Hemi)</span>
+      <input type="range" class="lp-range" id="hemi-intensity" min="0" max="3" step="0.05" value="0.8">
+      <span class="th-val" id="hemi-val">0.8</span>
+    </div>
+    <hr class="lp-sep">
+    <div class="lp-label" style="color:var(--gold)">Spotlight</div>
+    <button class="btn" id="btn-add-spot" style="font-size:8px;padding:5px 8px;margin-top:2px">+ Thêm đèn rọi</button>
+    <div class="lp-label" style="font-size:6.5px;color:var(--text-dim);margin-top:2px">Sau khi nhấn, click vào vị trí trên sàn/tường để đặt đèn</div>
+    <div id="spot-list"></div>
+  </div>
+
+  <!-- Path Creator Panel -->
+  <div id="path-panel">
+    <h3>🛤 Lộ trình tham quan</h3>
+
+    <div class="pp-section">Thêm điểm dừng</div>
+    <div class="pp-hint">
+      Nhấn <b style="color:var(--accent)">+ Điểm hiện tại</b> để thêm vị trí camera đang đứng.<br>
+      Hoặc click vào sơ đồ mặt bằng khi bật chế độ Path.
+    </div>
+    <div class="pp-row">
+      <button class="pp-btn primary" id="pp-add-current" style="flex:1">＋ Thêm điểm hiện tại</button>
+    </div>
+
+    <hr class="pp-sep">
+    <div class="pp-section">Danh sách điểm dừng (<span id="wp-count">0</span>)</div>
+    <div id="path-waypoints"></div>
+
+
+    <hr class="pp-sep">
+    <div class="pp-row" style="gap:5px">
+      <button class="pp-btn danger"  id="pp-clear" style="flex:1">✕ Xoá hết điểm</button>
+    </div>
+    <div class="pp-row">
+      <button class="pp-btn" id="pp-auto-gen" style="flex:1;font-size:7px">✦ Tự tạo lộ trình qua tất cả phòng</button>
+    </div>
+  </div>
+
+
+
+
+  <!-- Waypoint nav tooltip -->
+  <div id="wp-nav-tip">
+    <span class="wp-tip-num" id="wp-tip-num">1</span>
+    <div>
+      <div id="wp-tip-label" class="wp-tip-label">Diem tham quan</div>
+      <div style="color:var(--accent);font-size:7px;letter-spacing:.1em">Di chuyen den diem nay</div>
+    </div>
+  </div>
+  <div id="path-walk-hint">Click vong tron tren san de di chuyen den diem do</div>
+
+  <!-- Path Navigation Bar -->
+  <div id="path-nav-bar">
+    <button class="pnb-arrow" id="pnb-prev" title="Diem truoc">&#9664;</button>
+    <div id="pnb-info">
+      <span id="pnb-num">1 / 1</span>
+      <span id="pnb-label">&#8212;</span>
+    </div>
+    <button class="pnb-arrow" id="pnb-next" title="Diem tiep theo">&#9654;</button>
+    <button id="pnb-close" title="Dong">&#10005;</button>
+  </div>
+
+  <!-- Wall Style Panel -->
+  <div id="wall-style-panel">
+    <h3>🎨 Màu tường & Giấy dán</h3>
+
+    <div class="ws-section">Màu tường</div>
+    <div class="ws-row">
+      <input type="color" id="ws-wall-color" class="ws-color" value="#d8d3ca">
+      <button class="ws-btn primary" id="btn-paint-mode" style="flex:1">🖌️ Bật chế độ sơn</button>
+    </div>
+    <div id="ws-paint-hint" style="font-size:7px;color:var(--text-dim);letter-spacing:.09em;line-height:1.9;margin-top:4px;display:none">
+      Di chuột vào tường → hover sáng<br>Click để sơn · Click phải để gỡ
+    </div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px" id="ws-color-presets"></div>
+    <div class="ws-row" style="margin-top:6px">
+      <button class="ws-btn" id="ws-apply-color-all" style="flex:1;font-size:7px">Sơn tất cả tường</button>
+    </div>
+
+    <hr class="ws-sep">
+    <div class="ws-section">Giấy dán tường / họa tiết</div>
+    <div class="ws-upload-zone" id="ws-upload-zone" onclick="document.getElementById('fi-wallpaper').click()">
+      + Upload JPG · PNG · họa tiết
+    </div>
+    <input type="file" id="fi-wallpaper" accept="image/*" multiple style="display:none">
+    <div id="ws-wallpaper-preview" class="wallpaper-preview-wrap"></div>
+    <div class="ws-row">
+      <span class="ws-label">Lặp (tile)</span>
+      <input type="range" class="ws-range" id="ws-tile-repeat" min="1" max="20" step="1" value="4">
+      <span style="color:var(--gold);font-size:8px;min-width:24px;text-align:right" id="ws-tile-val">4×</span>
+    </div>
+    <div class="ws-row">
+      <button class="ws-btn primary" id="btn-paint-wallpaper" style="flex:1">🖌️ Dán họa tiết (sơn)</button>
+    </div>
+    <div class="ws-row" style="margin-top:4px">
+      <button class="ws-btn" id="ws-apply-wallpaper-all" style="flex:1;font-size:7px">Dán tất cả tường</button>
+      <button class="ws-btn danger" id="ws-remove-wallpaper-all" style="flex:1;font-size:7px">✕ Gỡ tất cả</button>
+    </div>
+
+    <hr class="ws-sep">
+    <div class="ws-section">Sàn nhà</div>
+    <div class="ws-row">
+      <span class="ws-label">Màu sàn</span>
+      <input type="color" id="ws-floor-color" class="ws-color" value="#6b5a47">
+      <button class="ws-btn primary" id="ws-apply-floor">Áp dụng</button>
+    </div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px" id="ws-floor-presets"></div>
+  </div>
+
+  <!-- Room Manager Panel -->
+  <div id="room-panel">
+    <h3>🏛 Quản lý không gian</h3>
+
+    <div class="rp-section">Phòng hiện tại</div>
+    <div id="room-list"></div>
+
+    <hr class="rp-sep">
+    <div class="rp-section">Thêm phòng mới</div>
+
+    <div class="rp-row">
+      <span class="rp-label">Tên phòng</span>
+      <input type="text" id="new-room-name" class="rp-input" placeholder="Phòng 2" value="">
+    </div>
+    <div class="rp-row">
+      <span class="rp-label">Rộng (m)</span>
+      <input type="number" id="new-room-w" class="rp-input" value="16" min="6" max="40" step="1">
+      <span class="rp-label" style="min-width:50px">Dài (m)</span>
+      <input type="number" id="new-room-d" class="rp-input" value="16" min="6" max="40" step="1">
+    </div>
+    <div class="rp-row">
+      <span class="rp-label">Tầng</span>
+      <select id="new-room-floor" class="rp-select">
+        <option value="0">Tầng 1 (hiện tại)</option>
+        <option value="1">Tầng 2 (+5m)</option>
+        <option value="2">Tầng 3 (+10m)</option>
+      </select>
+    </div>
+    <div style="font-size:7px;color:var(--text-dim);letter-spacing:.1em;margin-top:2px">Hướng kết nối từ phòng đang chọn:</div>
+    <div class="dir-grid" id="dir-grid">
+      <div></div>
+      <button class="dir-btn" id="dir-N">▲ Bắc</button>
+      <div></div>
+      <button class="dir-btn" id="dir-W">◄ Tây</button>
+      <div class="dir-btn dir-center" id="dir-center">Phòng<br>chọn</div>
+      <button class="dir-btn" id="dir-E">Đông ►</button>
+      <div></div>
+      <button class="dir-btn" id="dir-S">▼ Nam</button>
+      <div></div>
+    </div>
+    <button class="rp-btn primary" id="btn-add-standalone">+ Thêm phòng độc lập</button>
+
+    <hr class="rp-sep">
+    <div class="rp-section">Thêm cầu thang</div>
+    <div style="font-size:7px;color:var(--text-dim);letter-spacing:.08em;line-height:1.8">Đặt cầu thang nối tầng trong phòng đang chọn:</div>
+    <div class="rp-row">
+      <span class="rp-label">Nối tầng</span>
+      <select id="stair-to-floor" class="rp-select">
+        <option value="1">Lên tầng 2</option>
+        <option value="2">Lên tầng 3</option>
+        <option value="0">Xuống tầng 1</option>
+      </select>
+    </div>
+    <div class="rp-row">
+      <span class="rp-label">Vị trí</span>
+      <select id="stair-corner" class="rp-select">
+        <option value="NE">Góc Đông-Bắc</option>
+        <option value="NW">Góc Tây-Bắc</option>
+        <option value="SE">Góc Đông-Nam</option>
+        <option value="SW">Góc Tây-Nam</option>
+      </select>
+    </div>
+    <button class="rp-btn primary" id="btn-add-stair">+ Thêm cầu thang</button>
+
+    <hr class="rp-sep">
+    <div class="rp-section">Ngoài trời</div>
+    <div style="font-size:7px;color:var(--text-dim);letter-spacing:.08em;line-height:1.8">Không gian mở bên ngoài các phòng. Người dùng có thể ra ngoài tự do.</div>
+    <div class="rp-row">
+      <span class="rp-label">Kích thước sân</span>
+      <select id="exterior-size" class="rp-select">
+        <option value="60">Nhỏ (60×60m)</option>
+        <option value="120" selected>Vừa (120×120m)</option>
+        <option value="200">Lớn (200×200m)</option>
+      </select>
+    </div>
+    <button class="rp-btn primary" id="btn-toggle-exterior">🌿 Bật/Tắt ngoài trời</button>
+  </div>
+
+  <!-- Transform HUD -->
+  <div id="transform-hud">
+    <span class="th-label">Chọn:</span>
+    <span class="th-val" id="th-name">—</span>
+    <div class="th-sep"></div>
+    <button class="th-btn" id="th-info">📝 Info</button>
+    <button class="th-btn" id="th-up">↑</button>
+    <button class="th-btn" id="th-down">↓</button>
+    <button class="th-btn" id="th-left">←</button>
+    <button class="th-btn" id="th-right">→</button>
+    <div class="th-sep"></div>
+    <button class="th-btn" id="th-rot-l">↺ Xoay</button>
+    <button class="th-btn" id="th-rot-r">↻ Xoay</button>
+    <button class="th-btn" id="th-flip-h">⇆ Lật</button>
+    <button class="th-btn" id="th-scale-up">＋ To</button>
+    <button class="th-btn" id="th-scale-dn">－ Nhỏ</button>
+    <div class="th-sep"></div>
+    <button class="th-btn danger" id="th-remove">🗑 Gỡ</button>
+  </div>
+
+  <!-- Artwork info popup -->
+  <div id="artwork-popup">
+    <h3>📝 Thông tin tác phẩm</h3>
+    <div class="popup-field"><label>Tên tác phẩm</label><input type="text" id="pop-title" placeholder="Untitled"></div>
+    <div class="popup-field"><label>Tác giả</label><input type="text" id="pop-artist" placeholder="Unknown"></div>
+    <div class="popup-field"><label>Năm</label><input type="text" id="pop-year" placeholder="2024"></div>
+    <div class="popup-field"><label>Mô tả</label><textarea id="pop-desc" rows="3" placeholder="Nhập mô tả..."></textarea></div>
+    <div class="popup-field"><label>Giá tiền</label><input type="text" id="pop-price" placeholder="VD: 5.000.000 VNĐ hoặc Liên hệ"></div>
+    <div class="popup-btns">
+      <button class="popup-btn cancel" id="pop-cancel">Huỷ</button>
+      <button class="popup-btn save" id="pop-save">Lưu</button>
+    </div>
+  </div>
+
+  <!-- Info display popup -->
+  <div id="info-popup">
+    <div class="ip-title" id="ip-title">Untitled</div>
+    <div class="ip-artist" id="ip-artist"></div>
+    <div class="ip-year" id="ip-year"></div>
+    <div class="ip-desc" id="ip-desc"></div>
+    <div class="ip-price" id="ip-price"></div>
+    <button class="ip-close" id="ip-close">ĐÓNG</button>
+  </div>
+
+  <div id="loading-overlay">
+    <div class="ld-txt" id="ld-txt">Đang tải...</div>
+    <div class="ld-bar"><div class="ld-fill" id="ld-fill"></div></div>
+  </div>
+
+  <div id="info">W A S D · Kéo chuột để xoay</div>
+
+  <!-- Chat -->
+  <button id="chat-toggle">💬 Chat<span id="chat-unread"></span></button>
+  <div id="chat-box" class="chat-hidden">
+    <div id="chat-header">
+      <span>Phòng tranh · Trực tiếp</span>
+      <span id="chat-username-display" title="Click để đổi tên">…</span>
+    </div>
+    <div id="chat-messages"></div>
+    <div id="chat-input-wrap">
+      <input id="chat-input" placeholder="Nhắn tin…" autocomplete="off" />
+      <button id="chat-send">Gửi</button>
+    </div>
+  </div>
+
+  <!-- Floor Plan (replaces minimap) -->
+  <div id="floorplan" class="mini">
+    <div id="floorplan-header">
+      <span>Mặt bằng</span>
+      <span>
+        <button id="fp-toggle-size" title="Phóng to/thu nhỏ">⤢</button>
+        <button id="fp-close" title="Đóng">✕</button>
+      </span>
+    </div>
+    <canvas id="floorplan-canvas" width="140" height="120"></canvas>
+  </div>
+  <button class="btn" id="btn-show-fp" style="position:absolute;bottom:14px;left:14px;z-index:14;display:none;font-size:8px;padding:5px 9px">🗺 Mặt bằng</button>
+
+  <div id="toast"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+const SUPABASE_URL    = "https://ejdzwaekpejmfajfnccl.supabase.co";
+const SUPABASE_KEY    = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVqZHp3YWVrcGVqbWZhamZuY2NsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MDgyNDYsImV4cCI6MjA5MzE4NDI0Nn0.69bZ3hQcCuhEPmy-Pi4Phou6OhCrbNIR7kuPR1yfr1I";
+const STORAGE_BUCKET  = 'patbk';
+const GALLERY_NAME    = 'gallery test';
+const supabase        = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+(function () {
+
+/* ── TOAST ── */
+function toast(msg, type='info', duration=2800) {
+  const el = document.getElementById('toast');
+  el.textContent=msg; el.className='show '+type;
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>{ el.className=''; }, duration);
+}
+
+/* ── TRANH MẪU ── */
+const artDefs = [
+  (ctx,w,h)=>{ctx.fillStyle='#0a1a3a';ctx.fillRect(0,0,w,h);for(let i=0;i<8;i++){const g=ctx.createRadialGradient(w/2,h/2,0,w/2,h/2,40);g.addColorStop(0,'rgba(80,120,255,.6)');g.addColorStop(1,'rgba(0,20,80,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(w/2+Math.sin(i)*30,h/2+Math.cos(i)*20,18-i*1.5,0,Math.PI*2);ctx.fill();}ctx.fillStyle='rgba(255,220,100,.9)';ctx.beginPath();ctx.arc(w/2,h/2,5,0,Math.PI*2);ctx.fill();},
+  (ctx,w,h)=>{const cols=['#c84b31','#e8a020','#2d6a4f','#f4a261','#264653'];for(let i=0;i<24;i++){ctx.fillStyle=cols[i%cols.length];ctx.fillRect(Math.random()*w,Math.random()*h,15+Math.random()*35,15+Math.random()*35);}},
+  (ctx,w,h)=>{ctx.fillStyle='#f0ede8';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#2a2a2a';ctx.lineWidth=1.5;for(let i=0;i<6;i++){ctx.beginPath();ctx.moveTo(10+i*18,10);ctx.bezierCurveTo(w-10,h*.3,10,h*.7,w-10+i*5,h-10);ctx.stroke();}ctx.fillStyle='#c84b31';ctx.beginPath();ctx.arc(w*.6,h*.4,12,0,Math.PI*2);ctx.fill();},
+  (ctx,w,h)=>{const g=ctx.createLinearGradient(0,0,w,h);g.addColorStop(0,'#0d0d0d');g.addColorStop(.5,'#1a0a2e');g.addColorStop(1,'#0a1a3a');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);for(let i=0;i<60;i++){ctx.fillStyle=`rgba(255,255,255,${Math.random()*.8+.2})`;ctx.beginPath();ctx.arc(Math.random()*w,Math.random()*h,Math.random()*2,0,Math.PI*2);ctx.fill();}}
+];
+artDefs.forEach((fn,i)=>{ const c=document.getElementById('art'+i); if(c) fn(c.getContext('2d'),60,45); });
+function makeArtCanvas(i){ const c=document.createElement('canvas');c.width=512;c.height=384;artDefs[i](c.getContext('2d'),512,384);return c; }
+
+/* ── THREE.JS SETUP ── */
+const canvas  = document.getElementById('c');
+const PANEL_W = 160;
+const PW      = canvas.parentElement.clientWidth - PANEL_W;
+const PH      = 600;
+canvas.style.width = PW + 'px';
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setSize(PW, PH);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.physicallyCorrectLights = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+renderer.setClearColor(0x191613);
+
+const scene  = new THREE.Scene();
+scene.fog    = new THREE.FogExp2(0x191613, 0.008);
+const camera = new THREE.PerspectiveCamera(70, PW/PH, .1, 200);
+camera.position.set(0, 1.7, 5);
+
+/* ── ÁNH SÁNG ── */
+const ambLight  = new THREE.AmbientLight(0xfff4e0, 1.2);   // tăng cho GLB room tối
+const hemiLight = new THREE.HemisphereLight(0xffe8c0, 0x3a2e20, 0.8);
+scene.add(ambLight); scene.add(hemiLight);
+
+/* ── MATERIALS ── */
+const floorMat = new THREE.MeshLambertMaterial({color:0x6b5a47});
+const wallMat  = new THREE.MeshLambertMaterial({color:0xd8d3ca, side:THREE.DoubleSide});
+const ceilMat  = new THREE.MeshLambertMaterial({color:0xe8e4de});
+const frameMat = new THREE.MeshLambertMaterial({color:0x1a1006});
+const skirtMat = new THREE.MeshLambertMaterial({color:0xc8c2b5});
+const doorFrameMat = new THREE.MeshLambertMaterial({color:0x4a3820});
+const stairMat = new THREE.MeshLambertMaterial({color:0x8a7a6a});
+const grassMat = new THREE.MeshLambertMaterial({color:0x2d4a1e});
+const groundMat= new THREE.MeshLambertMaterial({color:0x3a3228});
+const skyMat   = new THREE.MeshLambertMaterial({color:0x87CEEB, side:THREE.BackSide});
+
+/* ══════════════════════════════════════════════
+   ROOM SYSTEM
+══════════════════════════════════════════════ */
+let roomIdCounter = 0;
+let activeRoomId  = 0;
+const rooms = []; // { id, name, x, z, w, d, floor, meshes:[], wallMeshes:[], doors:[], label }
+let exteriorEnabled = false;
+let exteriorGroup   = null;
+let skyDome = null;
+
+/* ── PATH CREATOR state (declared early — used in drawFloorPlan & animate) ── */
+const pathWaypoints = [];
+const pathMarkers   = [];
+
+
+/* wp travel state */
+let wpTravelTarget = null;
+let wpTravelFrom   = null;
+let wpTravelT      = 0;
+let wpHoveredDisc  = null;
+
+function getFloorY(floor) { return floor * 5.1; } // 5m ceiling + 0.1 slab
+
+// ── GLB ROOM MODEL ──
+// Holds reference to the loaded GLB scene object
+let glbRoomModel = null;
+let glbRoomLoaded = false;
+
+// Build a single room geometry in the scene
+// For room0 (the GLB room): only invisible raycasting planes — GLB provides the visuals
+// For additional rooms: full geometry as before
+function buildRoom(roomDef) {
+  const { id, name, x, z, w, d, floor } = roomDef;
+  const fy = getFloorY(floor);
+  const H  = 5; // ceiling height
+  const hw = w/2, hd = d/2;
+  const meshes = [];
+  const wMeshes = [];
+
+  // Determine if this is the GLB room (room id 0 = phòng chính)
+  const isGlbRoom = (id === 0);
+
+  if (!isGlbRoom) {
+    // ── STANDARD GEOMETRY for extra rooms ──
+    const fl = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat.clone());
+    fl.rotation.x=-Math.PI/2; fl.position.set(x, fy, z); fl.receiveShadow=true;
+    scene.add(fl); meshes.push(fl);
+
+    const gridHelper = new THREE.GridHelper(Math.max(w,d), Math.max(w,d), 0x5a4a38, 0x5a4a38);
+    gridHelper.position.set(x, fy+.001, z);
+    scene.add(gridHelper); meshes.push(gridHelper);
+
+    const ce = new THREE.Mesh(new THREE.PlaneGeometry(w, d), ceilMat.clone());
+    ce.rotation.x=Math.PI/2; ce.position.set(x, fy+H, z);
+    scene.add(ce); meshes.push(ce);
+
+    // Skirtings
+    [[x-hw+.04,fy+.14,z,0,0,w],[x+hw-.04,fy+.14,z,0,0,w],[x,fy+.14,z-hd+.04,d,0,0],[x,fy+.14,z+hd-.04,d,0,0]].forEach(([sx,sy,sz,bw,bh,bl])=>{
+      const sk = new THREE.Mesh(new THREE.BoxGeometry(bw||.07, .28, bl||.07), skirtMat);
+      sk.position.set(sx,sy,sz); scene.add(sk); meshes.push(sk);
+    });
+
+    // Ceiling tracks
+    [-w/4, w/4].filter(ox=>Math.abs(ox)>1).forEach(ox=>{
+      const r = new THREE.Mesh(new THREE.BoxGeometry(.05,.05,d*.9), new THREE.MeshLambertMaterial({color:0x888880}));
+      r.position.set(x+ox, fy+H-.12, z); scene.add(r); meshes.push(r);
+    });
+  }
+
+  // ── INVISIBLE WALL PLANES for raycasting (all rooms) ──
+  const wallDefs = [
+    {ww:w, wh:H, px:x,    py:fy+H/2, pz:z-hd, ry:0,           dir:'N'},
+    {ww:w, wh:H, px:x,    py:fy+H/2, pz:z+hd, ry:Math.PI,     dir:'S'},
+    {ww:d, wh:H, px:x-hw, py:fy+H/2, pz:z,    ry:Math.PI/2,   dir:'W'},
+    {ww:d, wh:H, px:x+hw, py:fy+H/2, pz:z,    ry:-Math.PI/2,  dir:'E'},
+  ];
+  wallDefs.forEach(wd => {
+    // For GLB room: invisible material for raycasting only
+    // For standard rooms: visible wall material
+    const mat = isGlbRoom
+      ? new THREE.MeshBasicMaterial({visible:false, side:THREE.DoubleSide})
+      : wallMat.clone();
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(wd.ww, wd.wh), mat);
+    m.position.set(wd.px, wd.py, wd.pz);
+    m.rotation.y = wd.ry;
+    if (!isGlbRoom) m.receiveShadow = true;
+    m.userData.roomId = id;
+    m.userData.wallDir = wd.dir;
+    scene.add(m); meshes.push(m); wMeshes.push(m);
+  });
+
+  // ── SPOTLIGHTS ──
+  const spots=[];
+  [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([xi,zi])=>{
+    const l = new THREE.SpotLight(0xffe0a0, isGlbRoom ? 1.5 : 2.0, 18, Math.PI/5, .55, 1.3);
+    l.position.set(x+xi*(w/3), fy+H-.15, z+zi*(d/3));
+    l.target.position.set(x+xi*(w/3), fy, z+zi*(d/3));
+    l.castShadow=false; scene.add(l); scene.add(l.target);
+    spots.push(l);
+    if (!isGlbRoom) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(.05,6,6), new THREE.MeshBasicMaterial({color:0xffddaa}));
+      b.position.copy(l.position); scene.add(b); meshes.push(b);
+    }
+  });
+
+  roomDef.meshes    = meshes;
+  roomDef.wallMeshes= wMeshes;
+  roomDef.spots     = spots;
+  roomDef.doors     = roomDef.doors || [];
+
+  // Floor plane for raycasting placement
+  const fp = new THREE.Mesh(new THREE.PlaneGeometry(w*.9, d*.9), new THREE.MeshBasicMaterial({visible:false}));
+  fp.rotation.x=-Math.PI/2; fp.position.set(x, fy+.01, z);
+  fp.userData.isFloor=true; fp.userData.roomId=id;
+  scene.add(fp); meshes.push(fp);
+  roomDef.floorPlane = fp;
+
+  return roomDef;
+}
+
+function destroyRoom(roomDef) {
+  roomDef.meshes.forEach(m=>scene.remove(m));
+  roomDef.spots.forEach(l=>{scene.remove(l);scene.remove(l.target);});
+  if(roomDef.doorMeshes) roomDef.doorMeshes.forEach(m=>scene.remove(m));
+  // If this was the GLB room, remove the model too
+  if(roomDef.id === 0 && glbRoomModel) {
+    scene.remove(glbRoomModel);
+    glbRoomModel = null;
+    glbRoomLoaded = false;
+  }
+}
+
+function rebuildRoom(roomDef) {
+  destroyRoom(roomDef);
+  buildRoom(roomDef);
+}
+
+// Add a door opening on a wall
+// doorCenter: world coordinate along the wall (X for N/S walls, Z for W/E walls)
+function addDoor(roomDef, dir, doorCenter) {
+  const {x,z,w,d,floor} = roomDef;
+  const fy = getFloorY(floor);
+  const H  = 5;
+  const hw = w/2, hd = d/2;
+  const DW = 2.2, DH = 2.8;
+  const doorMeshes = roomDef.doorMeshes || [];
+
+  // Remove original full wall
+  const wallM = roomDef.wallMeshes.find(m => m.userData.wallDir === dir);
+  if (wallM) scene.remove(wallM);
+
+  const makeWallPanel = (px, py, pz, pw, ph, ry) => {
+    if (pw < 0.05 || ph < 0.05) return;
+    const mat = wallMat.clone(); mat.side = THREE.DoubleSide;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), mat);
+    m.position.set(px, py, pz);
+    m.rotation.y = ry;
+    m.receiveShadow = true;
+    scene.add(m); doorMeshes.push(m);
+  };
+
+  const makeFrame = (px, py, pz, fw, fh, fd, ry) => {
+    const fm = new THREE.Mesh(new THREE.BoxGeometry(fw, fh, fd), doorFrameMat);
+    fm.position.set(px, py, pz);
+    fm.rotation.y = ry;
+    scene.add(fm); doorMeshes.push(fm);
+  };
+
+  if (dir === 'N' || dir === 'S') {
+    // Wall runs along X axis; doorCenter is X position of door midpoint
+    const dc     = (doorCenter !== undefined) ? doorCenter : x;
+    // Clamp so door stays inside wall
+    const dcC    = Math.max(x - hw + DW/2 + 0.1, Math.min(x + hw - DW/2 - 0.1, dc));
+    const wz     = dir === 'N' ? z - hd : z + hd;
+    const ry     = dir === 'N' ? 0 : Math.PI;
+    const aboveH = H - DH;
+
+    // Left panel: from wall left edge to door left edge
+    const leftW  = dcC - DW/2 - (x - hw);
+    // Right panel: from door right edge to wall right edge
+    const rightW = (x + hw) - (dcC + DW/2);
+
+    if (leftW  > 0.05) makeWallPanel(x - hw + leftW/2,   fy + H/2,          wz, leftW,  H,      ry);
+    if (rightW > 0.05) makeWallPanel(x + hw - rightW/2,  fy + H/2,          wz, rightW, H,      ry);
+    if (aboveH > 0.05) makeWallPanel(dcC,                 fy + DH + aboveH/2, wz, DW,    aboveH, ry);
+
+    makeFrame(dcC,             fy + DH,   wz, DW + .18, .12, .12, ry);
+    makeFrame(dcC - DW/2-.06, fy + DH/2, wz, .12, DH,  .12, ry);
+    makeFrame(dcC + DW/2+.06, fy + DH/2, wz, .12, DH,  .12, ry);
+
+    roomDef.doorMeshes = doorMeshes;
+    roomDef.doors.push({dir, doorCenter: dcC});
+
+  } else {
+    // W or E — wall runs along Z axis; doorCenter is Z position of door midpoint
+    const dc     = (doorCenter !== undefined) ? doorCenter : z;
+    const dcC    = Math.max(z - hd + DW/2 + 0.1, Math.min(z + hd - DW/2 - 0.1, dc));
+    const wx     = dir === 'W' ? x - hw : x + hw;
+    const ry     = dir === 'W' ? Math.PI/2 : -Math.PI/2;
+    const aboveH = H - DH;
+
+    const leftW  = dcC - DW/2 - (z - hd);
+    const rightW = (z + hd) - (dcC + DW/2);
+
+    if (leftW  > 0.05) makeWallPanel(wx, fy + H/2,          z - hd + leftW/2,  leftW,  H,      ry);
+    if (rightW > 0.05) makeWallPanel(wx, fy + H/2,          z + hd - rightW/2, rightW, H,      ry);
+    if (aboveH > 0.05) makeWallPanel(wx, fy + DH + aboveH/2, dcC,               DW,    aboveH, ry);
+
+    makeFrame(wx, fy + DH,   dcC,             DW + .18, .12, .12, ry);
+    makeFrame(wx, fy + DH/2, dcC - DW/2-.06, .12, DH,  .12,      ry);
+    makeFrame(wx, fy + DH/2, dcC + DW/2+.06, .12, DH,  .12,      ry);
+
+    roomDef.doorMeshes = doorMeshes;
+    roomDef.doors.push({dir, doorCenter: dcC});
+  }
+}
+
+// Add staircase in room
+function addStaircase(roomDef, corner, toFloor) {
+  const {x, z, w, d, floor} = roomDef;
+  const fy     = getFloorY(floor);
+  const targetY= getFloorY(toFloor);
+  const rise   = Math.abs(targetY - fy);
+  const steps  = Math.round(rise / 0.2);
+  const stairGroup = new THREE.Group();
+  const totalRun = 3.5;
+  const stepW  = 1.2;
+
+  // Corner offsets
+  const cMap = { NE:[1,1], NW:[-1,1], SE:[1,-1], SW:[-1,-1] };
+  const [cx, cz] = cMap[corner] || [1,1];
+  const bx = x + cx*(w/2 - totalRun/2 - 0.5);
+  const bz = z + cz*(d/2 - stepW/2   - 0.5);
+
+  for (let i=0; i<steps; i++) {
+    const stepH = rise / steps;
+    const step = new THREE.Mesh(
+      new THREE.BoxGeometry(stepW, stepH, totalRun/steps),
+      stairMat
+    );
+    const ystep = fy + i*stepH + stepH/2;
+    const zstep = bz + cz*(i*(totalRun/steps));
+    step.position.set(bx, ystep, zstep);
+    stairGroup.add(step);
+  }
+
+  // Handrail
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(.05, rise*.6, totalRun*.98), new THREE.MeshLambertMaterial({color:0x5a4020}));
+  rail.position.set(bx, fy + rise*.3, bz + cz*totalRun/2);
+  stairGroup.add(rail);
+
+  scene.add(stairGroup);
+  if(!roomDef.staircases) roomDef.staircases=[];
+  roomDef.staircases.push({group:stairGroup, corner, toFloor});
+  const allStairMeshes = [];
+  stairGroup.traverse(m=>{ if(m.isMesh) allStairMeshes.push(m); });
+  if(!roomDef.doorMeshes) roomDef.doorMeshes=[];
+  roomDef.doorMeshes.push(...allStairMeshes);
+}
+
+/* ── EXTERIOR SPACE ── */
+function buildExterior(size) {
+  if (exteriorGroup) { scene.remove(exteriorGroup); }
+  exteriorGroup = new THREE.Group();
+
+  // Ground plane
+  const groundGeo  = new THREE.PlaneGeometry(size, size);
+  const ground = new THREE.Mesh(groundGeo, groundMat.clone());
+  ground.rotation.x = -Math.PI/2; ground.position.y=-.05;
+  ground.receiveShadow=true; exteriorGroup.add(ground);
+
+  // Grass patches
+  for(let i=0; i<60; i++) {
+    const gx = (Math.random()-.5)*size*.9;
+    const gz = (Math.random()-.5)*size*.9;
+    // Don't place grass inside rooms
+    let insideRoom=false;
+    rooms.forEach(r=>{ if(r.floor===0 && Math.abs(gx-r.x)<r.w/2+1 && Math.abs(gz-r.z)<r.d/2+1) insideRoom=true; });
+    if(insideRoom) continue;
+    const patch = new THREE.Mesh(new THREE.PlaneGeometry(1.5+Math.random()*3, 1.5+Math.random()*3), grassMat.clone());
+    patch.rotation.x=-Math.PI/2; patch.position.set(gx,-.04,gz);
+    exteriorGroup.add(patch);
+  }
+
+  // Trees (simple cone+trunk)
+  for(let i=0; i<25; i++) {
+    const tx = (Math.random()-.5)*size*.8;
+    const tz = (Math.random()-.5)*size*.8;
+    let inside=false;
+    rooms.forEach(r=>{ if(r.floor===0 && Math.abs(tx-r.x)<r.w/2+3 && Math.abs(tz-r.z)<r.d/2+3) inside=true; });
+    if(inside) continue;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.15,.2,1.5,6), new THREE.MeshLambertMaterial({color:0x4a3010}));
+    trunk.position.set(tx,.75,tz); exteriorGroup.add(trunk);
+    const crown = new THREE.Mesh(new THREE.ConeGeometry(.8+Math.random()*.5, 2.5+Math.random(), 7), new THREE.MeshLambertMaterial({color:0x1a4010+(Math.random()*0x0a2000|0)}));
+    crown.position.set(tx, 2.8+Math.random(), tz); exteriorGroup.add(crown);
+  }
+
+  // Path / walkway between rooms
+  rooms.forEach(r=>{
+    if(r.floor!==0) return;
+    const path = new THREE.Mesh(new THREE.PlaneGeometry(r.w*.6, r.d*.6), new THREE.MeshLambertMaterial({color:0x8a7a6a}));
+    path.rotation.x=-Math.PI/2; path.position.set(r.x,-.03,r.z);
+    exteriorGroup.add(path);
+  });
+
+  // Ambient exterior light (directional sun)
+  const sun = new THREE.DirectionalLight(0xffe8c0, 1.0);
+  sun.position.set(30, 50, 20); sun.castShadow=true;
+  exteriorGroup.add(sun);
+
+  scene.add(exteriorGroup);
+
+  // Sky dome
+  if(skyDome) scene.remove(skyDome);
+  const skyGeo  = new THREE.SphereGeometry(size*.9, 16, 8);
+  skyDome = new THREE.Mesh(skyGeo, skyMat.clone());
+  scene.add(skyDome);
+
+  // Update fog for exterior
+  scene.fog = new THREE.FogExp2(0x87CEEB, 0.004);
+  renderer.setClearColor(0x87CEEB);
+}
+
+function removeExterior() {
+  if(exteriorGroup) { scene.remove(exteriorGroup); exteriorGroup=null; }
+  if(skyDome) { scene.remove(skyDome); skyDome=null; }
+  scene.fog = new THREE.FogExp2(0x191613, 0.008);
+  renderer.setClearColor(0x191613);
+}
+
+/* ── CREATE DEFAULT ROOM ── */
+function createRoom(name, rx, rz, rw, rd, rfloor, skipBuild=false) {
+  const id = roomIdCounter++;
+  const def = { id, name: name||`Phòng ${id+1}`, x:rx||0, z:rz||0, w:rw||16, d:rd||16, floor:rfloor||0, meshes:[], wallMeshes:[], doorMeshes:[], doors:[], spots:[] };
+  rooms.push(def);
+  if(!skipBuild) buildRoom(def);
+  return def;
+}
+
+// Initial room
+const room0 = createRoom('Phòng chính', 0, 0, 16, 16, 0);
+activeRoomId = room0.id;
+
+// ── LOAD GLB ROOM MODEL ──
+// Đặt file office_room_1__black__.glb cùng thư mục với file HTML này.
+
+(function loadGlbRoom() {
+  const lo = document.getElementById('loading-overlay');
+  const lt = document.getElementById('ld-txt');
+  const lf = document.getElementById('ld-fill');
+  lo.classList.add('show');
+  lt.textContent = 'Đang tải phòng 3D...';
+  lf.style.width = '10%';
+
+  const GLB_PATH = 'office_room_1__black__.glb';
+
+  gltfLoader.load(
+    GLB_PATH,
+    (gltf) => {
+      const model = gltf.scene;
+
+      // Scale model để khớp với room0 (16×16m)
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const targetSize = 16;
+      const maxDim = Math.max(size.x, size.z);
+      const scaleFactor = targetSize / maxDim;
+      model.scale.setScalar(scaleFactor);
+
+      // Re-measure sau khi scale
+      const box2   = new THREE.Box3().setFromObject(model);
+      const min2   = box2.min;
+      const center2= box2.getCenter(new THREE.Vector3());
+
+      // Căn giữa tại (0,0,0), sàn nằm tại y=0
+      model.position.set(-center2.x, -min2.y, -center2.z);
+
+      // Bật shadow + giữ nguyên vật liệu PBR từ GLB
+      model.traverse(child => {
+        if (child.isMesh) {
+          child.castShadow    = true;
+          child.receiveShadow = true;
+          if (child.material) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach(m => { m.needsUpdate = true; });
+          }
+        }
+      });
+
+      scene.add(model);
+      glbRoomModel  = model;
+      glbRoomLoaded = true;
+
+      lo.classList.remove('show');
+      lf.style.width = '100%';
+      toast('Phòng 3D đã tải xong ✓', 'success');
+    },
+    (xhr) => {
+      if (xhr.lengthComputable) {
+        const pct = Math.round(xhr.loaded / xhr.total * 85);
+        lf.style.width = (10 + pct) + '%';
+        lt.textContent = 'Đang tải phòng 3D... ' + (10 + pct) + '%';
+      }
+    },
+    (err) => {
+      console.warn('GLB load error:', err);
+      document.getElementById('loading-overlay').classList.remove('show');
+      // Fallback: hiện geometry thông thường cho room0
+      const r0def = rooms.find(r => r.id === 0);
+      if (r0def) {
+        // Rebuild với visual geometry
+        const fy=0, H=5, hw=8, hd=8, w=16, d=16, x=0, z=0;
+        const fl=new THREE.Mesh(new THREE.PlaneGeometry(w,d),floorMat.clone());
+        fl.rotation.x=-Math.PI/2; fl.position.set(0,0,0); fl.receiveShadow=true;
+        scene.add(fl); r0def.meshes.push(fl);
+        const ce=new THREE.Mesh(new THREE.PlaneGeometry(w,d),ceilMat.clone());
+        ce.rotation.x=Math.PI/2; ce.position.set(0,H,0);
+        scene.add(ce); r0def.meshes.push(ce);
+        const gh=new THREE.GridHelper(16,16,0x5a4a38,0x5a4a38);
+        gh.position.set(0,.001,0); scene.add(gh); r0def.meshes.push(gh);
+      }
+      toast('⚠ Không tải được GLB — đặt file .glb cùng thư mục HTML.', 'error', 7000);
+    }
+  );
+})();
+
+// Phòng thứ 2 — cạnh phòng chính về phía Đông
+const room1 = createRoom('Phòng 2', 16.1, 0, 16, 16, 0);
+
+/* ── CAMERA BOUNDS — can walk everywhere ── */
+function getCameraRoomBounds() {
+  // Allow unlimited movement if exterior
+  if(exteriorEnabled) {
+    const size = parseInt(document.getElementById('exterior-size').value)||120;
+    return {minX:-size/2, maxX:size/2, minZ:-size/2, maxZ:size/2};
+  }
+  // Merge all room bounds
+  let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
+  rooms.forEach(r=>{
+    if(r.floor !== getCurrentCameraFloor()) return;
+    minX=Math.min(minX, r.x-r.w/2+.5);
+    maxX=Math.max(maxX, r.x+r.w/2-.5);
+    minZ=Math.min(minZ, r.z-r.d/2+.5);
+    maxZ=Math.max(maxZ, r.z+r.d/2-.5);
+  });
+  if(minX===Infinity) return {minX:-8,maxX:8,minZ:-8,maxZ:8};
+  // add 1m tolerance for doors
+  return {minX:minX-.5, maxX:maxX+.5, minZ:minZ-.5, maxZ:maxZ+.5};
+}
+
+function getCurrentCameraFloor() {
+  const y = camera.position.y;
+  for(let f=2;f>=0;f--) { if(y >= getFloorY(f)-.5) return f; }
+  return 0;
+}
+
+/* ── ALL WALL MESHES (for raycasting) ── */
+function getAllWallMeshes() {
+  const wm=[];
+  rooms.forEach(r => {
+    r.wallMeshes.forEach(m => wm.push(m));
+    // Include door panel meshes (PlaneGeometry only, not BoxGeometry frames)
+    if (r.doorMeshes) r.doorMeshes.forEach(m => {
+      if (m.geometry && m.geometry.type === 'PlaneGeometry') wm.push(m);
+    });
+  });
+  return wm;
+}
+function getAllFloorPlanes() {
+  return rooms.map(r=>r.floorPlane).filter(Boolean);
+}
+
+/* ── SPOTLIGHT MANAGEMENT ── */
+const userSpotlights = [];
+let spotIdCounter=0, placingSpot=false;
+
+function addUserSpotlight(pos, targetPos, params={}) {
+  const id=++spotIdCounter;
+  const color=params.color||'#ffe0a0';
+  const intensity=params.intensity||2.0;
+  const colorHex=parseInt(color.replace('#',''),16);
+  const light=new THREE.SpotLight(colorHex,intensity,20,Math.PI/5,.5,1.2);
+  light.position.copy(pos); light.castShadow=true;
+  const tgt=new THREE.Object3D(); tgt.position.copy(targetPos||new THREE.Vector3(pos.x,0,pos.z));
+  scene.add(tgt); light.target=tgt; scene.add(light);
+  const bulb=new THREE.Mesh(new THREE.SphereGeometry(.06,6,6),new THREE.MeshBasicMaterial({color:colorHex}));
+  bulb.position.copy(pos); scene.add(bulb);
+  const sd={light,bulb,target:tgt,id,color,intensity};
+  userSpotlights.push(sd);
+  renderSpotList();
+  return sd;
+}
+
+function removeUserSpotlight(id) {
+  const idx=userSpotlights.findIndex(s=>s.id===id); if(idx===-1) return;
+  const s=userSpotlights[idx]; scene.remove(s.light);scene.remove(s.bulb);scene.remove(s.target);
+  userSpotlights.splice(idx,1); renderSpotList();
+}
+
+function renderSpotList() {
+  const list=document.getElementById('spot-list'); list.innerHTML='';
+  userSpotlights.forEach(s=>{
+    const item=document.createElement('div'); item.className='spot-item';
+    item.innerHTML=`<div class="spot-item-header"><span class="spot-name">Đèn #${s.id}</span><button class="spot-del" data-id="${s.id}">Xoá</button></div>
+      <div class="lp-row"><span class="lp-label">Cường độ</span><input type="range" class="lp-range spot-int" data-id="${s.id}" min="0" max="8" step="0.1" value="${s.intensity}"><span class="th-val spot-int-val" data-id="${s.id}">${s.intensity.toFixed(1)}</span></div>
+      <div class="lp-row"><span class="lp-label">Màu</span><input type="color" class="lp-color spot-col" data-id="${s.id}" value="${s.color}"></div>
+      <div class="lp-row"><span class="lp-label">Hướng X</span><input type="range" class="lp-range spot-dx" data-id="${s.id}" min="-8" max="8" step="0.1" value="${s.target.position.x.toFixed(1)}"></div>
+      <div class="lp-row"><span class="lp-label">Hướng Z</span><input type="range" class="lp-range spot-dz" data-id="${s.id}" min="-8" max="8" step="0.1" value="${s.target.position.z.toFixed(1)}"></div>`;
+    list.appendChild(item);
+  });
+  list.querySelectorAll('.spot-del').forEach(btn=>btn.addEventListener('click',()=>removeUserSpotlight(+btn.dataset.id)));
+  list.querySelectorAll('.spot-int').forEach(inp=>inp.addEventListener('input',()=>{const s=userSpotlights.find(s=>s.id===+inp.dataset.id);if(!s)return;s.intensity=+inp.value;s.light.intensity=s.intensity;list.querySelector(`.spot-int-val[data-id="${inp.dataset.id}"]`).textContent=(+inp.value).toFixed(1);}));
+  list.querySelectorAll('.spot-col').forEach(inp=>inp.addEventListener('input',()=>{const s=userSpotlights.find(s=>s.id===+inp.dataset.id);if(!s)return;s.color=inp.value;s.light.color.set(inp.value);s.bulb.material.color.set(inp.value);}));
+  list.querySelectorAll('.spot-dx').forEach(inp=>inp.addEventListener('input',()=>{const s=userSpotlights.find(s=>s.id===+inp.dataset.id);if(!s)return;s.target.position.x=+inp.value;}));
+  list.querySelectorAll('.spot-dz').forEach(inp=>inp.addEventListener('input',()=>{const s=userSpotlights.find(s=>s.id===+inp.dataset.id);if(!s)return;s.target.position.z=+inp.value;}));
+}
+
+/* ── AMBIENT LIGHT ── */
+document.getElementById('amb-intensity').addEventListener('input',function(){ambLight.intensity=+this.value;document.getElementById('amb-val').textContent=(+this.value).toFixed(2);});
+document.getElementById('amb-color').addEventListener('input',function(){ambLight.color.set(this.value);});
+document.getElementById('hemi-intensity').addEventListener('input',function(){hemiLight.intensity=+this.value;document.getElementById('hemi-val').textContent=(+this.value).toFixed(2);});
+
+/* ── ARTWORKS / MODELS ── */
+const artworks  = [];
+const models3d  = [];
+let selectedSource  = {type:'builtin',idx:0};
+let selectedArtwork = null;
+
+/* ── PLACE ARTWORK ── */
+function placeArtwork(src, pos, rot, meta={}, scaleVec=null) {
+  let tex, aspectRatio=4/3;
+  if(src.canvas){ tex=new THREE.CanvasTexture(src.canvas); aspectRatio=src.canvas.width/src.canvas.height; }
+  else { tex=src.texture; if(src.naturalWidth&&src.naturalHeight) aspectRatio=src.naturalWidth/src.naturalHeight; else if(src.videoEl){ const v=src.videoEl; if(v.videoWidth&&v.videoHeight) aspectRatio=v.videoWidth/v.videoHeight; } }
+  const BASE_H=1.65, AH=BASE_H, AW=AH*aspectRatio;
+  const group=new THREE.Group(); group.position.copy(pos); group.rotation.set(...rot);
+  const frame=new THREE.Mesh(new THREE.BoxGeometry(AW+.16,AH+.16,.08),frameMat); group.add(frame);
+  const plane=new THREE.Mesh(new THREE.PlaneGeometry(AW,AH),new THREE.MeshLambertMaterial({map:tex}));
+  plane.position.z=.046; group.add(plane);
+  if(scaleVec) group.scale.copy(scaleVec);
+  scene.add(group);
+  const sl=new THREE.SpotLight(0xfff2d0,2.2,10,Math.PI/7,0.6,1);
+  const n=new THREE.Vector3(Math.sin(rot[1]),0,Math.cos(rot[1]));
+  sl.position.copy(pos).addScaledVector(n,3).add(new THREE.Vector3(0,1.5,0));
+  sl.target.position.copy(pos); scene.add(sl); scene.add(sl.target);
+  const artData={group,frame,plane,light:sl,tgt:sl.target,isVideo:src.isVideo,tex:src.isVideo?tex:null,builtinIdx:src.builtinIdx!==undefined?src.builtinIdx:null,storageUrl:src.storageUrl||null,aspectRatio,meta:{title:meta.title||'',artist:meta.artist||'',year:meta.year||'',desc:meta.desc||'',price:meta.price||''}};
+  artworks.push(artData); return artData;
+}
+
+/* ── PEDESTAL ── */
+function makePedestal(pos) {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.1,.08,1.1), new THREE.MeshLambertMaterial({color:0xddd8d0}));
+  base.position.set(0,.04,0); g.add(base);
+  const col = new THREE.Mesh(new THREE.BoxGeometry(.9,.8,.9), new THREE.MeshLambertMaterial({color:0xf0ece6}));
+  col.position.set(0,.44,0); g.add(col);
+  const top = new THREE.Mesh(new THREE.BoxGeometry(1.05,.06,1.05), new THREE.MeshLambertMaterial({color:0xddd8d0}));
+  top.position.set(0,.87,0); g.add(top);
+  g.position.copy(pos); scene.add(g); return g;
+}
+
+function place3DModel(object,pos,storageUrl,name,meta={}){
+  const box=new THREE.Box3().setFromObject(object);const size=box.getSize(new THREE.Vector3());
+  object.scale.setScalar(1.2/Math.max(size.x,size.y,size.z)); object.position.copy(pos); object.position.y=.88;
+  scene.add(object);
+  const pl=new THREE.PointLight(0xfff0dd,1.5,4); pl.position.set(pos.x,pos.y+2,pos.z); scene.add(pl);
+  const ped=makePedestal(new THREE.Vector3(pos.x,0,pos.z));
+  models3d.push({object,light:pl,pedestal:ped,storageUrl:storageUrl||null,name:name||null,meta:{title:meta.title||'',artist:meta.artist||'',year:meta.year||'',desc:meta.desc||'',price:meta.price||''}});
+}
+
+/* ── SELECT SOURCE ── */
+function selectSource(src){ selectedSource=src; document.querySelectorAll('.thumb,.uth,.model-thumb').forEach(e=>e.classList.remove('sel')); }
+document.querySelectorAll('.thumb').forEach((el,i)=>{ el.addEventListener('click',()=>{ selectSource({type:'builtin',idx:i}); el.classList.add('sel'); }); });
+
+/* ── UPLOAD ── */
+async function uploadToStorage(file) {
+  const ext=file.name.split('.').pop();
+  const path=`uploads/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const {error}=await supabase.storage.from(STORAGE_BUCKET).upload(path,file,{upsert:true});
+  if(error) throw error;
+  return {url:supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path).data.publicUrl, path};
+}
+
+function addImageFromUrl(url,fileName,wrap) {
+  return new Promise(resolve=>{
+    const img=new Image(); img.crossOrigin='anonymous';
+    img.onload=()=>{
+      const nw=img.naturalWidth,nh=img.naturalHeight;
+      const cv=document.createElement('canvas'); cv.width=512; cv.height=Math.round(512*nh/nw);
+      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+      const tex=new THREE.CanvasTexture(cv);
+      const src={type:'user',isVideo:false,canvas:cv,texture:tex,storageUrl:url,naturalWidth:nw,naturalHeight:nh};
+      const wi=document.createElement('div'); wi.className='item-wrap';
+      const th=document.createElement('canvas'); th.width=120;th.height=90;th.className='uth';
+      th.getContext('2d').drawImage(img,0,0,120,90);
+      th.addEventListener('click',()=>{ selectSource(src); th.classList.add('sel'); });
+      const lbl=document.createElement('div'); lbl.className='utl'; lbl.textContent=(fileName||'').substring(0,20);
+      wi.appendChild(th); wi.appendChild(lbl); wrap.appendChild(wi);
+      selectSource(src); th.classList.add('sel'); resolve(src);
+    };
+    img.onerror=()=>resolve(null); img.src=url;
+  });
+}
+
+document.getElementById('fi-img').addEventListener('change',async function(e){
+  const wrap=document.getElementById('uw-img');
+  for(const file of Array.from(e.target.files)){
+    const isVideo=file.type.startsWith('video/');
+    const lo=document.getElementById('loading-overlay'); const lt=document.getElementById('ld-txt');
+    if(isVideo){
+      try{ lo.classList.add('show'); lt.textContent='Đang upload '+file.name+'...';
+        const {url}=await uploadToStorage(file); lo.classList.remove('show');
+        const vid=document.createElement('video'); vid.src=url;vid.loop=true;vid.muted=true;vid.playsInline=true;vid.crossOrigin='anonymous';
+        vid.addEventListener('loadeddata',()=>{
+          const tex=new THREE.VideoTexture(vid); tex.minFilter=THREE.LinearFilter;
+          const src={type:'user',isVideo:true,texture:tex,videoEl:vid,storageUrl:url};
+          const wi=document.createElement('div');wi.className='item-wrap';
+          const th=document.createElement('canvas');th.width=120;th.height=90;th.className='uth';
+          setTimeout(()=>{vid.currentTime=.5;vid.addEventListener('seeked',()=>{th.getContext('2d').drawImage(vid,0,0,120,90);},{once:true});},200);
+          th.addEventListener('click',()=>{selectSource(src);th.classList.add('sel');});
+          const lbl=document.createElement('div');lbl.className='utl';lbl.textContent='▶ '+file.name.substring(0,20);
+          wi.appendChild(th);wi.appendChild(lbl);wrap.appendChild(wi);selectSource(src);th.classList.add('sel');vid.play();
+        });
+      }catch(err){document.getElementById('loading-overlay').classList.remove('show');toast('Upload lỗi: '+err.message,'error');}
+    } else {
+      try{ lo.classList.add('show');lt.textContent='Đang upload '+file.name+'...';
+        const {url}=await uploadToStorage(file); lo.classList.remove('show');
+        await addImageFromUrl(url,file.name,wrap);
+      }catch(err){document.getElementById('loading-overlay').classList.remove('show');toast('Upload lỗi: '+err.message,'error');}
+    }
+  }
+  this.value='';
+});
+
+const gltfLoader=new THREE.GLTFLoader(), objLoader=new THREE.OBJLoader();
+document.getElementById('fi-3d').addEventListener('change',async function(e){
+  for(const file of Array.from(e.target.files)){
+    const ext=file.name.split('.').pop().toLowerCase();
+    const lo=document.getElementById('loading-overlay'),lf=document.getElementById('ld-fill'),lt=document.getElementById('ld-txt');
+    lo.classList.add('show');lt.textContent='Đang upload '+file.name+'...';lf.style.width='0%';
+    try{
+      const {url}=await uploadToStorage(file); lf.style.width='60%';lt.textContent='Đang load model...';
+      const onLoad=(object)=>{
+        lo.classList.remove('show');
+        const src={type:'model3d',object,name:file.name,storageUrl:url};
+        const th=document.createElement('div');th.className='model-thumb';th.textContent='📦';th.title=file.name;
+        th.addEventListener('click',()=>{selectSource(src);th.classList.add('sel');});
+        const lbl=document.createElement('div');lbl.className='utl';lbl.textContent=file.name.substring(0,20);
+        document.getElementById('uw-3d').appendChild(th);document.getElementById('uw-3d').appendChild(lbl);
+        selectSource(src);th.classList.add('sel');toast('Đã tải model: '+file.name.substring(0,18),'success');
+      };
+      const onErr=(err)=>{lo.classList.remove('show');console.error(err);toast('Không load được model: '+file.name,'error');};
+      const onProg=(xhr)=>{if(xhr.lengthComputable)lf.style.width=60+Math.round(xhr.loaded/xhr.total*40)+'%';};
+      if(ext==='glb'||ext==='gltf') gltfLoader.load(url,(gltf)=>onLoad(gltf.scene),onProg,onErr);
+      else if(ext==='obj') objLoader.load(url,(obj)=>{obj.traverse(c=>{if(c.isMesh)c.material=new THREE.MeshLambertMaterial({color:0xccbbaa});});onLoad(obj);},onProg,onErr);
+      else {lo.classList.remove('show');toast('Định dạng không hỗ trợ: .'+ext,'error');}
+    }catch(err){lo.classList.remove('show');toast('Upload lỗi: '+err.message,'error');}
+  }
+  this.value='';
+});
+
+/* ── MODE ── */
+let mode='walk';
+
+function updateMode(m) {
+  mode=m; canvas.className=m==='walk'?'walk-mode':'';
+  ['walk','place','select'].forEach(id=>document.getElementById('btn-'+id).classList.toggle('active',m===id));
+  document.getElementById('info').textContent=
+    m==='walk'   ? 'W A S D · Kéo chuột để xoay' :
+    m==='select' ? 'Click tranh để chọn & chỉnh — WASD vẫn dùng được' :
+    selectedSource.type==='model3d' ? 'Click sàn để đặt model' : 'Click tường để treo tranh';
+  if(m!=='select') deselectArtwork();
+}
+
+document.getElementById('btn-walk').addEventListener('click',()=>updateMode('walk'));
+document.getElementById('btn-place').addEventListener('click',()=>updateMode('place'));
+document.getElementById('btn-select').addEventListener('click',()=>updateMode('select'));
+
+document.getElementById('btn-light').addEventListener('click',()=>{
+  const lp=document.getElementById('light-panel'); lp.classList.toggle('open');
+  document.getElementById('btn-light').classList.toggle('active',lp.classList.contains('open'));
+  document.getElementById('room-panel').classList.remove('open');
+  document.getElementById('btn-rooms').classList.remove('active');
+});
+
+/* ── ROOM PANEL ── */
+document.getElementById('btn-rooms').addEventListener('click',()=>{
+  const rp=document.getElementById('room-panel'); rp.classList.toggle('open');
+  document.getElementById('btn-rooms').classList.toggle('active',rp.classList.contains('open'));
+  document.getElementById('light-panel').classList.remove('open');
+  document.getElementById('btn-light').classList.remove('active');
+  renderRoomList();
+});
+
+document.getElementById('btn-add-spot').addEventListener('click',()=>{
+  placingSpot=true; toast('Click vào tường hoặc sàn để đặt đèn rọi','info',4000);
+});
+
+/* ── ROOM MANAGER FUNCTIONS ── */
+function getActiveRoom() { return rooms.find(r=>r.id===activeRoomId)||rooms[0]; }
+
+function renderRoomList() {
+  const list=document.getElementById('room-list'); list.innerHTML='';
+  rooms.forEach(r=>{
+    const item=document.createElement('div');
+    item.className='room-item'+(r.id===activeRoomId?' active-room':'');
+    item.innerHTML=`<div class="room-item-top">
+      <span class="room-name">${r.name}</span>
+      <span class="room-floor-badge">T${r.floor+1}</span>
+    </div>
+    <div class="room-dims">${r.w}m × ${r.d}m · (${r.x.toFixed(0)},${r.z.toFixed(0)})</div>
+    <div class="room-actions">
+      <button class="rp-btn rp-select" data-id="${r.id}">Chọn</button>
+      <button class="rp-btn rp-teleport" data-id="${r.id}">🚶 Vào</button>
+      <button class="rp-btn danger rp-delete" data-id="${r.id}">Xoá</button>
+    </div>`;
+    list.appendChild(item);
+  });
+  list.querySelectorAll('.rp-select').forEach(btn=>btn.addEventListener('click',()=>{
+    activeRoomId=+btn.dataset.id; renderRoomList();
+    document.getElementById('dir-center').innerHTML=`<span style="font-size:6px;letter-spacing:.05em">${getActiveRoom().name}</span>`;
+    toast('Đã chọn: '+getActiveRoom().name,'info');
+  }));
+  list.querySelectorAll('.rp-teleport').forEach(btn=>btn.addEventListener('click',()=>{
+    const r=rooms.find(rm=>rm.id===+btn.dataset.id); if(!r) return;
+    camera.position.set(r.x, getFloorY(r.floor)+1.7, r.z+r.d/4);
+    yaw=0; pitch=0;
+    toast('Đã di chuyển đến: '+r.name,'success');
+  }));
+  list.querySelectorAll('.rp-delete').forEach(btn=>btn.addEventListener('click',()=>{
+    const idx=rooms.findIndex(rm=>rm.id===+btn.dataset.id);
+    if(idx===-1) return;
+    if(rooms.length<=1){ toast('Không thể xoá phòng duy nhất','error'); return; }
+    destroyRoom(rooms[idx]); rooms.splice(idx,1);
+    if(activeRoomId===+btn.dataset.id) activeRoomId=rooms[0].id;
+    renderRoomList(); renderRoomSwitcher(); drawFloorPlan();
+    toast('Đã xoá phòng','info');
+  }));
+}
+
+/* ── ROOM SWITCHER BAR (quick switch) ── */
+function renderRoomSwitcher() {
+  const bar = document.getElementById('room-switcher');
+  bar.innerHTML = '';
+  rooms.forEach((r, i) => {
+    if (i > 0) {
+      const sep = document.createElement('div');
+      sep.className = 'rsw-sep';
+      bar.appendChild(sep);
+    }
+    const btn = document.createElement('button');
+    btn.className = 'rsw-btn' + (r.id === activeRoomId ? ' rsw-active' : '');
+    btn.textContent = r.name;
+    btn.dataset.id = r.id;
+    btn.addEventListener('click', () => {
+      const rm = rooms.find(rm => rm.id === +btn.dataset.id);
+      if (!rm) return;
+      activeRoomId = rm.id;
+      camera.position.set(rm.x, getFloorY(rm.floor) + 1.7, rm.z + rm.d / 4);
+      yaw = 0; pitch = 0;
+      renderRoomSwitcher();
+      renderRoomList();
+      toast('Đã vào: ' + rm.name, 'success');
+    });
+    bar.appendChild(btn);
+  });
+}
+
+// Add room in a direction relative to active room
+function addRoomInDirection(dir) {
+  const base   = getActiveRoom();
+  const name   = document.getElementById('new-room-name').value || `Phòng ${rooms.length+1}`;
+  const nw     = parseInt(document.getElementById('new-room-w').value)||16;
+  const nd     = parseInt(document.getElementById('new-room-d').value)||16;
+  const nfloor = parseInt(document.getElementById('new-room-floor').value)||0;
+
+  // Position next to base room
+  let nx=base.x, nz=base.z;
+  const GAP=.1; // small gap (wall thickness)
+  if(dir==='N') nz = base.z - base.d/2 - nd/2 - GAP;
+  if(dir==='S') nz = base.z + base.d/2 + nd/2 + GAP;
+  if(dir==='W') nx = base.x - base.w/2 - nw/2 - GAP;
+  if(dir==='E') nx = base.x + base.w/2 + nw/2 + GAP;
+
+  // If different floor, position at same location
+  if(nfloor !== base.floor) { nx=base.x; nz=base.z; }
+
+  const newRoom = createRoom(name, nx, nz, nw, nd, nfloor);
+  activeRoomId  = newRoom.id;
+
+  // Add connecting door on both rooms (same floor only)
+  if(nfloor === base.floor && dir!=='UP'&&dir!=='DN') {
+    const oppositeDir = {N:'S',S:'N',E:'W',W:'E'}[dir];
+    addDoor(base, dir);
+    addDoor(newRoom, oppositeDir);
+  }
+
+  renderRoomList(); renderRoomSwitcher(); drawFloorPlan();
+  document.getElementById('new-room-name').value=`Phòng ${rooms.length+1}`;
+  toast(`Đã thêm "${name}" về phía ${dir}`,'success');
+}
+
+['N','S','E','W'].forEach(dir=>{
+  document.getElementById('dir-'+dir).addEventListener('click',()=>addRoomInDirection(dir));
+});
+
+document.getElementById('btn-add-standalone').addEventListener('click',()=>{
+  const name=document.getElementById('new-room-name').value||`Phòng ${rooms.length+1}`;
+  const nw  =parseInt(document.getElementById('new-room-w').value)||16;
+  const nd  =parseInt(document.getElementById('new-room-d').value)||16;
+  const nf  =parseInt(document.getElementById('new-room-floor').value)||0;
+  // Place far away
+  const ox  = (rooms.length%3)*25 - 25;
+  const oz  = Math.floor(rooms.length/3)*25;
+  const nr  = createRoom(name, ox, oz, nw, nd, nf);
+  activeRoomId=nr.id; renderRoomList(); renderRoomSwitcher(); drawFloorPlan();
+  toast(`Đã thêm phòng độc lập "${name}"`,'success');
+});
+
+document.getElementById('btn-add-stair').addEventListener('click',()=>{
+  const base  = getActiveRoom();
+  const corner= document.getElementById('stair-corner').value;
+  const tof   = parseInt(document.getElementById('stair-to-floor').value);
+  addStaircase(base, corner, tof);
+  drawFloorPlan();
+  toast(`Đã thêm cầu thang ${corner} → Tầng ${tof+1}`,'success');
+});
+
+document.getElementById('btn-toggle-exterior').addEventListener('click',()=>{
+  exteriorEnabled=!exteriorEnabled;
+  if(exteriorEnabled){
+    const size=parseInt(document.getElementById('exterior-size').value)||120;
+    buildExterior(size);
+    toast('Đã bật không gian ngoài trời','success');
+  } else {
+    removeExterior();
+    toast('Đã tắt không gian ngoài trời','info');
+  }
+  document.getElementById('exterior-size').onchange=()=>{
+    if(exteriorEnabled){ const size=parseInt(document.getElementById('exterior-size').value)||120; buildExterior(size); }
+  };
+});
+
+/* ── SELECT ARTWORK ── */
+function deselectArtwork() { selectedArtwork=null; document.getElementById('transform-hud').classList.remove('open'); document.getElementById('artwork-popup').classList.remove('open'); }
+
+function selectArtwork(artData, index) {
+  selectedArtwork={data:artData,index};
+  const hud=document.getElementById('transform-hud'); hud.classList.add('open');
+  document.getElementById('th-name').textContent=artData.meta.title||`Tác phẩm #${index+1}`;
+}
+
+const MOVE_STEP=0.1, ROT_STEP=Math.PI/24, SCALE_STEP=0.1;
+document.getElementById('th-up').addEventListener('click',()=>{if(!selectedArtwork)return;selectedArtwork.data.group.position.y+=MOVE_STEP;});
+document.getElementById('th-down').addEventListener('click',()=>{if(!selectedArtwork)return;selectedArtwork.data.group.position.y-=MOVE_STEP;});
+document.getElementById('th-left').addEventListener('click',()=>{if(!selectedArtwork)return;const g=selectedArtwork.data.group;g.position.addScaledVector(new THREE.Vector3(-1,0,0).applyEuler(g.rotation),MOVE_STEP);});
+document.getElementById('th-right').addEventListener('click',()=>{if(!selectedArtwork)return;const g=selectedArtwork.data.group;g.position.addScaledVector(new THREE.Vector3(1,0,0).applyEuler(g.rotation),MOVE_STEP);});
+document.getElementById('th-rot-l').addEventListener('click',()=>{if(!selectedArtwork)return;selectedArtwork.data.group.rotation.y+=ROT_STEP;});
+document.getElementById('th-rot-r').addEventListener('click',()=>{if(!selectedArtwork)return;selectedArtwork.data.group.rotation.y-=ROT_STEP;});
+document.getElementById('th-flip-h').addEventListener('click',()=>{if(!selectedArtwork)return;selectedArtwork.data.plane.scale.x*=-1;});
+document.getElementById('th-scale-up').addEventListener('click',()=>{if(!selectedArtwork)return;const s=selectedArtwork.data.group.scale;s.setScalar(s.x+SCALE_STEP);});
+document.getElementById('th-scale-dn').addEventListener('click',()=>{if(!selectedArtwork)return;const s=selectedArtwork.data.group.scale;s.setScalar(Math.max(.1,s.x-SCALE_STEP));});
+document.getElementById('th-remove').addEventListener('click',()=>{if(!selectedArtwork)return;const a=selectedArtwork.data;scene.remove(a.group);scene.remove(a.light);scene.remove(a.tgt);artworks.splice(selectedArtwork.index,1);deselectArtwork();toast('Đã gỡ tác phẩm','info');});
+
+let infoEditTarget=null;
+document.getElementById('th-info').addEventListener('click',()=>{
+  if(!selectedArtwork)return; infoEditTarget=selectedArtwork.data;
+  const m=infoEditTarget.meta;
+  ['title','artist','year','desc','price'].forEach(k=>document.getElementById('pop-'+k).value=m[k]||'');
+  const popup=document.getElementById('artwork-popup'); popup.style.left='250px'; popup.style.top='60px'; popup.classList.add('open');
+});
+document.getElementById('pop-cancel').addEventListener('click',()=>document.getElementById('artwork-popup').classList.remove('open'));
+document.getElementById('pop-save').addEventListener('click',()=>{
+  if(!infoEditTarget)return;
+  ['title','artist','year','desc','price'].forEach(k=>infoEditTarget.meta[k]=document.getElementById('pop-'+k).value);
+  document.getElementById('artwork-popup').classList.remove('open');
+  if(selectedArtwork) document.getElementById('th-name').textContent=infoEditTarget.meta.title||`Tác phẩm #${selectedArtwork.index+1}`;
+  else if(infoEditTarget.object) document.getElementById('th-name').textContent=infoEditTarget.meta.title||infoEditTarget.name||'Model 3D';
+  toast('Đã lưu thông tin tác phẩm','success');
+});
+document.getElementById('ip-close').addEventListener('click',()=>document.getElementById('info-popup').classList.remove('open'));
+
+/* ── RESET ── */
+document.getElementById('btn-reset').addEventListener('click',()=>{
+  artworks.forEach(a=>{scene.remove(a.group);scene.remove(a.light);scene.remove(a.tgt);}); artworks.length=0;
+  models3d.forEach(m=>{scene.remove(m.object);scene.remove(m.light);scene.remove(m.pedestal);}); models3d.length=0;
+  deselectArtwork(); toast('Đã reset gallery','info');
+});
+document.getElementById('btn-cam').addEventListener('click',()=>{
+  camera.position.set(0,1.7,5); yaw=0; pitch=0; toast('Camera reset','info');
+});
+
+/* ── RAYCASTER ── */
+const raycaster=new THREE.Raycaster(), mouse=new THREE.Vector2();
+
+canvas.addEventListener('click',e=>{
+  const rect=canvas.getBoundingClientRect();
+  mouse.x= ((e.clientX-rect.left)/rect.width)*2-1;
+  mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(mouse,camera);
+
+  const allWalls=getAllWallMeshes();
+  const allFloors=getAllFloorPlanes();
+
+  if(placingSpot){
+    placingSpot=false;
+    const hits=raycaster.intersectObjects([...allWalls,...allFloors]);
+    if(hits.length){ const pt=hits[0].point.clone(); addUserSpotlight(pt.clone().add(new THREE.Vector3(0,2.5,0)),pt); toast('Đã thêm đèn rọi','success'); }
+    return;
+  }
+  if(mode==='select'){
+    const hits=raycaster.intersectObjects(artworks.map(a=>a.group),true);
+    if(hits.length){ let h=hits[0].object; while(h.parent&&!artworks.find(a=>a.group===h))h=h.parent; const idx=artworks.findIndex(a=>a.group===h); if(idx!==-1){selectArtwork(artworks[idx],idx);return;} }
+    // Check 3D models
+    const mhits=raycaster.intersectObjects(models3d.map(m=>m.object),true);
+    if(mhits.length){
+      let h=mhits[0].object; while(h.parent&&!models3d.find(m=>m.object===h))h=h.parent;
+      const mdl=models3d.find(m=>m.object===h);
+      if(mdl){
+        infoEditTarget=mdl;
+        const m=mdl.meta||{};
+        ['title','artist','year','desc','price'].forEach(k=>document.getElementById('pop-'+k).value=m[k]||'');
+        const popup=document.getElementById('artwork-popup');
+        popup.style.left='250px'; popup.style.top='60px'; popup.classList.add('open');
+        document.getElementById('transform-hud').classList.add('open');
+        document.getElementById('th-name').textContent=m.title||mdl.name||'Model 3D';
+        selectedArtwork=null; // model selected separately
+        return;
+      }
+    }
+    deselectArtwork(); return;
+  }
+  if(mode==='walk'){
+    // Check artworks
+    const hits=raycaster.intersectObjects(artworks.map(a=>a.group),true);
+    if(hits.length){ let h=hits[0].object; while(h.parent&&!artworks.find(a=>a.group===h))h=h.parent; const art=artworks.find(a=>a.group===h); if(art){ const m=art.meta; if(!m.title&&!m.artist&&!m.year&&!m.desc&&!m.price){toast('Tác phẩm chưa có thông tin. Dùng Select → 📝 Info để thêm.','info',3000);return;} document.getElementById('ip-title').textContent=m.title||'Untitled'; document.getElementById('ip-artist').textContent=m.artist?'— '+m.artist:''; document.getElementById('ip-year').textContent=m.year||''; document.getElementById('ip-desc').textContent=m.desc||''; const priceEl=document.getElementById('ip-price'); priceEl.textContent=m.price?'💰 '+m.price:''; const popup=document.getElementById('info-popup'); popup.style.left=Math.min(e.clientX-rect.left+10,PW-260)+'px'; popup.style.top=Math.max(10,e.clientY-rect.top-80)+'px'; popup.classList.add('open'); return; } }
+    // Check 3D models
+    const mhits=raycaster.intersectObjects(models3d.map(m=>m.object),true);
+    if(mhits.length){ let h=mhits[0].object; while(h.parent&&!models3d.find(m=>m.object===h))h=h.parent; const mdl=models3d.find(m=>m.object===h); if(mdl){ const m=mdl.meta||{}; if(!m.title&&!m.artist&&!m.year&&!m.desc&&!m.price){toast('Model chưa có thông tin. Dùng Select → 📝 Info để thêm.','info',3000);return;} document.getElementById('ip-title').textContent=m.title||mdl.name||'Model 3D'; document.getElementById('ip-artist').textContent=m.artist?'— '+m.artist:''; document.getElementById('ip-year').textContent=m.year||''; document.getElementById('ip-desc').textContent=m.desc||''; const priceEl=document.getElementById('ip-price'); priceEl.textContent=m.price?'💰 '+m.price:''; const popup=document.getElementById('info-popup'); popup.style.left=Math.min(e.clientX-rect.left+10,PW-260)+'px'; popup.style.top=Math.max(10,e.clientY-rect.top-80)+'px'; popup.classList.add('open'); return; } }
+    else document.getElementById('info-popup').classList.remove('open');
+    return;
+  }
+  if(mode!=='place') return;
+  if(selectedSource.type==='model3d'){
+    const hits=raycaster.intersectObjects(allFloors);
+    if(!hits.length) return;
+    const pt=hits[0].point.clone(); const clone=selectedSource.object.clone();
+    place3DModel(clone,pt,selectedSource.storageUrl||null,selectedSource.name||null); toast('Model đặt thành công','success');
+  } else {
+    const hits=raycaster.intersectObjects(allWalls);
+    if(!hits.length) return;
+    const hit=hits[0]; const pt=hit.point.clone();
+    const fy=getFloorY(getCurrentCameraFloor());
+    pt.y=Math.max(fy+1.1,Math.min(fy+3.6,pt.y));
+    const n=hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+    pt.add(n.clone().multiplyScalar(.05));
+    const rot=[0,Math.atan2(n.x,n.z),0];
+    if(selectedSource.type==='builtin') placeArtwork({canvas:makeArtCanvas(selectedSource.idx),builtinIdx:selectedSource.idx},pt,rot);
+    else if(selectedSource.isVideo){selectedSource.videoEl.play();placeArtwork({isVideo:true,texture:selectedSource.texture,storageUrl:selectedSource.storageUrl,videoEl:selectedSource.videoEl},pt,rot);}
+    else placeArtwork({canvas:selectedSource.canvas,texture:selectedSource.texture,storageUrl:selectedSource.storageUrl,naturalWidth:selectedSource.naturalWidth,naturalHeight:selectedSource.naturalHeight},pt,rot);
+    toast('Tranh đã đặt lên tường','success');
+  }
+});
+
+
+/* DISC HOVER & CLICK */
+canvas.addEventListener('mousemove', function(e) {
+  if (pathMarkers.length === 0) return;
+  var rect2 = canvas.getBoundingClientRect();
+  var mx2 = ((e.clientX - rect2.left) / rect2.width)  * 2 - 1;
+  var my2 = -((e.clientY - rect2.top)  / rect2.height) * 2 + 1;
+  raycaster.setFromCamera(new THREE.Vector2(mx2, my2), camera);
+  var discs = pathMarkers.map(function(m) { return m.mesh; }).filter(Boolean);
+  var hits = raycaster.intersectObjects(discs);
+  if (hits.length) {
+    var disc = hits[0].object;
+    if (disc !== wpHoveredDisc) {
+      if (wpHoveredDisc) refreshDiscTexture(wpHoveredDisc, false);
+      wpHoveredDisc = disc;
+      refreshDiscTexture(disc, true);
+      canvas.style.cursor = 'pointer';
+    }
+  } else {
+    if (wpHoveredDisc) {
+      refreshDiscTexture(wpHoveredDisc, false);
+      wpHoveredDisc = null;
+      canvas.style.cursor = (mode === 'walk') ? 'grab' : 'crosshair';
+    }
+  }
+});
+
+canvas.addEventListener('click', function(e) {
+  if (!wpHoveredDisc || mode !== 'walk') return;
+  var wpIdx = wpHoveredDisc.userData.waypointIdx;
+  if (wpIdx !== undefined) travelToWaypoint(wpIdx);
+}, true);
+
+/* ── CAMERA CONTROLS ── */
+const keys={};
+document.addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true);
+document.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+
+let yaw=0,pitch=0,drag=false,lx=0,ly=0;
+canvas.addEventListener('mousedown',e=>{if(mode==='walk'||mode==='select'){drag=true;lx=e.clientX;ly=e.clientY;}});
+window.addEventListener('mouseup',()=>drag=false);
+window.addEventListener('mousemove',e=>{
+  if(!drag)return;
+  yaw  -=(e.clientX-lx)*.004; pitch-=(e.clientY-ly)*.003;
+  pitch=Math.max(-1.05,Math.min(1.05,pitch)); lx=e.clientX;ly=e.clientY;
+});
+
+const dir3=new THREE.Vector3();
+
+/* ══════════════════════════════════════════════
+   FLOOR PLAN (replaces minimap)
+══════════════════════════════════════════════ */
+const fpCanvas  = document.getElementById('floorplan-canvas');
+const fpCtx     = fpCanvas.getContext('2d');
+let fpIsMini    = true;
+
+document.getElementById('fp-toggle-size').addEventListener('click',()=>{
+  const fp=document.getElementById('floorplan');
+  fpIsMini=!fpIsMini;
+  if(fpIsMini){ fp.className='mini'; fpCanvas.width=140; fpCanvas.height=120; }
+  else { fp.className='full'; fpCanvas.width=490; fpCanvas.height=460; }
+  drawFloorPlan();
+});
+document.getElementById('fp-close').addEventListener('click',()=>{
+  document.getElementById('floorplan').style.display='none';
+  document.getElementById('btn-show-fp').style.display='flex';
+});
+document.getElementById('btn-show-fp').addEventListener('click',()=>{
+  document.getElementById('floorplan').style.display='';
+  document.getElementById('btn-show-fp').style.display='none';
+});
+
+function drawFloorPlan() {
+  const W=fpCanvas.width, H=fpCanvas.height;
+  fpCtx.clearRect(0,0,W,H);
+  fpCtx.fillStyle='rgba(15,13,10,.9)'; fpCtx.fillRect(0,0,W,H);
+
+  // Compute world bounds
+  let minX=-20,maxX=20,minZ=-20,maxZ=20;
+  rooms.forEach(r=>{
+    minX=Math.min(minX,r.x-r.w/2-2); maxX=Math.max(maxX,r.x+r.w/2+2);
+    minZ=Math.min(minZ,r.z-r.d/2-2); maxZ=Math.max(maxZ,r.z+r.d/2+2);
+  });
+  const spanX=maxX-minX, spanZ=maxZ-minZ;
+  const pad=10;
+  const scaleX=(W-pad*2)/spanX, scaleZ=(H-pad*2-12)/spanZ;
+  const scale=Math.min(scaleX,scaleZ);
+
+  const toFP=(wx,wz)=>[pad+(wx-minX)*scale, pad+12+(wz-minZ)*scale];
+
+  // Group rooms by floor for color
+  const floorColors={0:'rgba(90,78,62,.7)',1:'rgba(60,78,100,.7)',2:'rgba(78,100,60,.7)'};
+  const floorBorders={0:'rgba(212,197,169,.5)',1:'rgba(100,160,220,.5)',2:'rgba(120,200,80,.5)'};
+
+  rooms.forEach(r=>{
+    const [fx1,fz1]=toFP(r.x-r.w/2, r.z-r.d/2);
+    const [fx2,fz2]=toFP(r.x+r.w/2, r.z+r.d/2);
+    const rw=fx2-fx1, rd=fz2-fz1;
+
+    // Room fill
+    fpCtx.fillStyle=floorColors[r.floor]||floorColors[0];
+    fpCtx.fillRect(fx1,fz1,rw,rd);
+
+    // Active room highlight
+    if(r.id===activeRoomId){
+      fpCtx.strokeStyle='rgba(200,169,110,.8)';fpCtx.lineWidth=2;
+      fpCtx.strokeRect(fx1,fz1,rw,rd);
+    } else {
+      fpCtx.strokeStyle=floorBorders[r.floor]||floorBorders[0];fpCtx.lineWidth=.8;
+      fpCtx.strokeRect(fx1,fz1,rw,rd);
+    }
+
+    // Room name
+    if(W>150){
+      fpCtx.fillStyle='rgba(212,197,169,.7)'; fpCtx.font=`${Math.min(9,rw*.12)}px Space Mono,monospace`;
+      fpCtx.textAlign='center'; fpCtx.textBaseline='middle';
+      fpCtx.fillText(r.name.substring(0,12), fx1+rw/2, fz1+rd/2);
+      fpCtx.fillStyle='rgba(200,169,110,.5)'; fpCtx.font=`6px Space Mono,monospace`;
+      fpCtx.fillText(`T${r.floor+1}`, fx1+rw/2, fz1+rd/2+10);
+    }
+
+    // Doors (show as gap in wall)
+    if(r.doors) r.doors.forEach(door=>{
+      fpCtx.strokeStyle='rgba(200,169,110,.9)'; fpCtx.lineWidth=2;
+      const DW=scale*2.2;
+      const cx2=(fx1+fx2)/2, cz2=(fz1+fz2)/2;
+      if(door.dir==='N'){fpCtx.clearRect(cx2-DW/2,fz1-1,DW,3);fpCtx.strokeRect(cx2-DW/2,fz1-1,DW,3);}
+      if(door.dir==='S'){fpCtx.clearRect(cx2-DW/2,fz2-1,DW,3);fpCtx.strokeRect(cx2-DW/2,fz2-1,DW,3);}
+      if(door.dir==='W'){fpCtx.clearRect(fx1-1,cz2-DW/2,3,DW);fpCtx.strokeRect(fx1-1,cz2-DW/2,3,DW);}
+      if(door.dir==='E'){fpCtx.clearRect(fx2-1,cz2-DW/2,3,DW);fpCtx.strokeRect(fx2-1,cz2-DW/2,3,DW);}
+    });
+
+    // Staircases
+    if(r.staircases) r.staircases.forEach(sc=>{
+      const cMap={NE:[r.x+r.w/2-2,r.z-r.d/2+2],NW:[r.x-r.w/2+2,r.z-r.d/2+2],SE:[r.x+r.w/2-2,r.z+r.d/2-2],SW:[r.x-r.w/2+2,r.z+r.d/2-2]};
+      const [sx,sz]=cMap[sc.corner]||[r.x,r.z];
+      const [sfx,sfz]=toFP(sx,sz);
+      fpCtx.fillStyle='rgba(200,169,110,.6)'; fpCtx.fillRect(sfx-5,sfz-5,10,10);
+      if(W>150){ fpCtx.fillStyle='rgba(212,197,169,.8)'; fpCtx.font='7px Space Mono,monospace'; fpCtx.textAlign='center'; fpCtx.fillText('↑',sfx,sfz+3); }
+    });
+  });
+
+  // Exterior boundary
+  if(exteriorEnabled){
+    const extSize=parseInt(document.getElementById('exterior-size').value)||120;
+    const [ex1,ez1]=toFP(-extSize/2,-extSize/2);
+    const [ex2,ez2]=toFP(extSize/2,extSize/2);
+    fpCtx.strokeStyle='rgba(45,74,30,.6)'; fpCtx.lineWidth=1; fpCtx.setLineDash([3,3]);
+    fpCtx.strokeRect(ex1,ez1,ex2-ex1,ez2-ez1);
+    fpCtx.setLineDash([]);
+  }
+
+  // Artworks on map
+  artworks.forEach(a=>{
+    const [ax,az]=toFP(a.group.position.x, a.group.position.z);
+    fpCtx.fillStyle='rgba(212,197,169,.65)'; fpCtx.fillRect(ax-2,az-2,4,4);
+  });
+
+  // Path waypoints on map
+  if (pathWaypoints.length > 0) {
+    fpCtx.strokeStyle='rgba(200,169,110,.6)'; fpCtx.lineWidth=1.5; fpCtx.setLineDash([3,2]);
+    fpCtx.beginPath();
+    pathWaypoints.forEach((wp, i) => {
+      const [wx2, wz2] = toFP(wp.x, wp.z);
+      if (i === 0) fpCtx.moveTo(wx2, wz2); else fpCtx.lineTo(wx2, wz2);
+    });
+    fpCtx.stroke(); fpCtx.setLineDash([]);
+    pathWaypoints.forEach((wp, i) => {
+      const [wx2, wz2] = toFP(wp.x, wp.z);
+      const isActive = false;
+      fpCtx.fillStyle = 'rgba(200,169,110,.5)';
+      fpCtx.beginPath(); fpCtx.arc(wx2, wz2, isActive ? 4 : 3, 0, Math.PI*2); fpCtx.fill();
+      if (W > 150) { fpCtx.fillStyle='rgba(212,197,169,.8)'; fpCtx.font='7px Space Mono,monospace'; fpCtx.textAlign='center'; fpCtx.fillText(String(i+1), wx2, wz2-5); }
+    });
+  }
+
+  // Camera position
+  const [cx,cz]=toFP(camera.position.x, camera.position.z);
+  fpCtx.save(); fpCtx.translate(cx,cz); fpCtx.rotate(-yaw);
+  fpCtx.fillStyle='#c8a96e'; fpCtx.beginPath(); fpCtx.moveTo(0,-6); fpCtx.lineTo(4,4); fpCtx.lineTo(-4,4); fpCtx.closePath(); fpCtx.fill();
+  fpCtx.restore();
+
+  // Legend
+  if(W>300){
+    fpCtx.fillStyle='rgba(212,197,169,.4)'; fpCtx.font='7px Space Mono,monospace'; fpCtx.textAlign='left';
+    fpCtx.fillText('■ T1  ■ T2  ■ T3  ● Tranh  ▲ Camera', 10, H-6);
+  }
+}
+
+/* ── COLLISION DETECTION ── */
+function canMoveTo(pos) {
+  const cFloor = getCurrentCameraFloor();
+  const PLAYER_R = 0.30;
+  const DW = 2.2;
+  const DOOR_HALF = DW / 2 - 0.1;
+  const WALL_THICK = 0.5; // shared wall tolerance
+
+  // Get door center for a wall direction of a room (null = no door = solid wall)
+  const getDC = (room, dir) => {
+    const door = room.doors ? room.doors.find(d => d.dir === dir) : null;
+    if (!door) return null;
+    if (door.doorCenter !== undefined && door.doorCenter !== null) return door.doorCenter;
+    return (dir === 'N' || dir === 'S') ? room.x : room.z;
+  };
+
+  // Check if wall is passable at a given "along" position
+  // A wall is passable if:
+  //   a) this room has a door here, OR
+  //   b) the adjacent room on the other side also has a door on its facing wall at same spot
+  const isPassable = (room, dir, along) => {
+    const dc = getDC(room, dir);
+    if (dc !== null && Math.abs(along - dc) < DOOR_HALF) return true;
+
+    // Check adjacent room's opposite wall
+    const opposite = {N:'S', S:'N', E:'W', W:'E'};
+    const opp = opposite[dir];
+    for (const other of rooms) {
+      if (other === room || other.floor !== cFloor) continue;
+      // Is other room touching this wall?
+      let wallMatches = false;
+      if (dir === 'E' && Math.abs((room.x + room.w/2) - (other.x - other.w/2)) < WALL_THICK) wallMatches = true;
+      if (dir === 'W' && Math.abs((room.x - room.w/2) - (other.x + other.w/2)) < WALL_THICK) wallMatches = true;
+      if (dir === 'N' && Math.abs((room.z - room.d/2) - (other.z + other.d/2)) < WALL_THICK) wallMatches = true;
+      if (dir === 'S' && Math.abs((room.z + room.d/2) - (other.z - other.d/2)) < WALL_THICK) wallMatches = true;
+      if (!wallMatches) continue;
+
+      const dc2 = getDC(other, opp);
+      if (dc2 !== null && Math.abs(along - dc2) < DOOR_HALF) return true;
+    }
+    return false;
+  };
+
+  for (const room of rooms) {
+    if (room.floor !== cFloor) continue;
+    const rx = room.x, rz = room.z;
+    const hw = room.w / 2, hd = room.d / 2;
+
+    const nearX = pos.x > rx - hw - 1.5 && pos.x < rx + hw + 1.5;
+    const nearZ = pos.z > rz - hd - 1.5 && pos.z < rz + hd + 1.5;
+    if (!nearX || !nearZ) continue;
+
+    // N wall
+    if (Math.abs(pos.z - (rz - hd)) < PLAYER_R && pos.x > rx-hw && pos.x < rx+hw) {
+      if (!isPassable(room, 'N', pos.x)) return false;
+    }
+    // S wall
+    if (Math.abs(pos.z - (rz + hd)) < PLAYER_R && pos.x > rx-hw && pos.x < rx+hw) {
+      if (!isPassable(room, 'S', pos.x)) return false;
+    }
+    // W wall
+    if (Math.abs(pos.x - (rx - hw)) < PLAYER_R && pos.z > rz-hd && pos.z < rz+hd) {
+      if (!isPassable(room, 'W', pos.z)) return false;
+    }
+    // E wall
+    if (Math.abs(pos.x - (rx + hw)) < PLAYER_R && pos.z > rz-hd && pos.z < rz+hd) {
+      if (!isPassable(room, 'E', pos.z)) return false;
+    }
+  }
+  return true;
+}
+
+/* ── ANIMATE ── */
+function animate() {
+  requestAnimationFrame(animate);
+  camera.rotation.order='YXZ'; camera.rotation.y=yaw; camera.rotation.x=pitch;
+  dir3.set(0,0,0);
+  if(!wpTravelTarget){
+  if(keys['w']||keys['arrowup'])    dir3.z-=1;
+  if(keys['s']||keys['arrowdown'])  dir3.z+=1;
+  if(keys['a']||keys['arrowleft'])  dir3.x-=1;
+  if(keys['d']||keys['arrowright']) dir3.x+=1;
+  }
+  if(dir3.length()>0){
+    dir3.normalize().applyEuler(new THREE.Euler(0,yaw,0));
+    const SPEED = 0.07;
+    const oldX = camera.position.x, oldZ = camera.position.z;
+    const newX = oldX + dir3.x * SPEED;
+    const newZ = oldZ + dir3.z * SPEED;
+
+    // Try X then Z separately (sliding collision)
+    const posX = new THREE.Vector3(newX, camera.position.y, oldZ);
+    const posZ = new THREE.Vector3(oldX, camera.position.y, newZ);
+    const posFull = new THREE.Vector3(newX, camera.position.y, newZ);
+
+    camera.position.x = canMoveTo(posX) ? newX : oldX;
+    camera.position.z = canMoveTo(posZ) ? newZ : oldZ;
+
+    const b = getCameraRoomBounds();
+    camera.position.x = Math.max(b.minX, Math.min(b.maxX, camera.position.x));
+    camera.position.z = Math.max(b.minZ, Math.min(b.maxZ, camera.position.z));
+    camera.position.y = getFloorY(getCurrentCameraFloor()) + 1.7;
+  }
+  artworks.forEach(a=>{ if(a.isVideo&&a.tex) a.tex.needsUpdate=true; });
+  models3d.forEach(m=>{ m.object.rotation.y+=.005; });
+  tickWpTravel();
+  drawFloorPlan();
+  renderer.render(scene,camera);
+}
+animate();
+
+/* ══════════════════════════════════════════════
+   WALL STYLE (COLOR + WALLPAPER)
+══════════════════════════════════════════════ */
+const wallColorPresets = ['#d8d3ca','#f0ebe2','#e8ddd0','#c8c0b8','#2a2a2a','#1a2a1a','#1a1a2a','#2a1a1a','#b0a898','#e0d8cc','#8a7a6a','#4a5a6a'];
+const floorColorPresets = ['#6b5a47','#4a3828','#8a7868','#b09880','#2a2a28','#5a6a4a','#3a4858','#c0a888'];
+
+function renderColorPresets(containerId, presets, colorInputId) {
+  const c = document.getElementById(containerId);
+  c.innerHTML = '';
+  presets.forEach(hex => {
+    const btn = document.createElement('div');
+    btn.style.cssText = `width:22px;height:22px;background:${hex};border-radius:3px;cursor:pointer;border:1.5px solid rgba(212,197,169,.2);transition:border-color .2s;flex-shrink:0`;
+    btn.title = hex;
+    btn.addEventListener('mouseenter', () => btn.style.borderColor = 'rgba(212,197,169,.8)');
+    btn.addEventListener('mouseleave', () => btn.style.borderColor = 'rgba(212,197,169,.2)');
+    btn.addEventListener('click', () => { document.getElementById(colorInputId).value = hex; });
+    c.appendChild(btn);
+  });
+}
+renderColorPresets('ws-color-presets', wallColorPresets, 'ws-wall-color');
+renderColorPresets('ws-floor-presets', floorColorPresets, 'ws-floor-color');
+
+// Tile repeat display
+document.getElementById('ws-tile-repeat').addEventListener('input', function() {
+  document.getElementById('ws-tile-val').textContent = this.value + '×';
+});
+
+// Wallpaper state
+let selectedWallpaperTexture = null;
+let selectedWallpaperThumb   = null;
+const wallpaperImages = [];
+
+/* ══════════════════════════════════════
+   PAINT MODE — hover highlight + click to paint
+══════════════════════════════════════ */
+let paintMode     = false;   // true = color paint, 'wallpaper' = wallpaper paint
+let hoveredWall   = null;    // mesh currently hovered
+let hoveredOrigColor = null; // original color before highlight
+let hoveredOrigMap   = null;
+
+// Custom paint cursor via CSS
+const paintCursorStyle = document.createElement('style');
+paintCursorStyle.id = 'paint-cursor-style';
+document.head.appendChild(paintCursorStyle);
+
+function setPaintCursor(on) {
+  paintCursorStyle.textContent = on
+    ? `#c { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E🖌️%3C/text%3E%3C/svg%3E") 4 28, crosshair !important; }`
+    : '';
+}
+
+function clearWallHover() {
+  if (hoveredWall) {
+    hoveredWall.material.color.set(hoveredOrigColor);
+    if (hoveredOrigMap !== undefined) hoveredWall.material.map = hoveredOrigMap;
+    hoveredWall.material.needsUpdate = true;
+    hoveredWall = null;
+    hoveredOrigColor = null;
+    hoveredOrigMap = null;
+  }
+}
+
+function applyToWall(mesh) {
+  if (paintMode === 'wallpaper') {
+    if (!selectedWallpaperTexture) { toast('Hãy chọn một họa tiết trước', 'error'); return; }
+    const repeat = parseInt(document.getElementById('ws-tile-repeat').value) || 4;
+    const clonedTex = selectedWallpaperTexture.clone();
+    clonedTex.wrapS = THREE.RepeatWrapping;
+    clonedTex.wrapT = THREE.RepeatWrapping;
+    clonedTex.repeat.set(repeat, repeat);
+    clonedTex.needsUpdate = true;
+    // Giữ lại storageUrl để save/load đúng
+    clonedTex.userData = clonedTex.userData || {};
+    clonedTex.userData.storageUrl = selectedWallpaperTexture.userData && selectedWallpaperTexture.userData.storageUrl ? selectedWallpaperTexture.userData.storageUrl : null;
+    mesh.material.map = clonedTex;
+    mesh.material.color.set(0xffffff);
+    mesh.material.needsUpdate = true;
+  } else {
+    const hex = document.getElementById('ws-wall-color').value;
+    mesh.material.map = null;
+    mesh.material.color.set(hex);
+    mesh.material.needsUpdate = true;
+  }
+}
+
+function removeWallpaper(mesh) {
+  const hex = document.getElementById('ws-wall-color').value;
+  mesh.material.map = null;
+  mesh.material.color.set(hex);
+  mesh.material.needsUpdate = true;
+}
+
+function enterPaintMode(type) {
+  paintMode = type; // 'color' or 'wallpaper'
+  if (typeof exitDoorMode === 'function') exitDoorMode();
+  setPaintCursor(true);
+  // Update button states
+  document.getElementById('btn-paint-mode').classList.toggle('active', type === 'color');
+  document.getElementById('btn-paint-wallpaper').classList.toggle('active', type === 'wallpaper');
+  document.getElementById('ws-paint-hint').style.display = 'block';
+  toast(type === 'wallpaper' ? '🖌️ Click tường để dán họa tiết · Click phải để gỡ' : '🖌️ Click tường để sơn màu · Click phải để gỡ', 'info', 4000);
+}
+
+function exitPaintMode() {
+  paintMode = false;
+  clearWallHover();
+  setPaintCursor(false);
+  document.getElementById('btn-paint-mode').classList.remove('active');
+  document.getElementById('btn-paint-wallpaper').classList.remove('active');
+  document.getElementById('ws-paint-hint').style.display = 'none';
+}
+
+document.getElementById('btn-paint-mode').addEventListener('click', () => {
+  if (paintMode === 'color') exitPaintMode();
+  else enterPaintMode('color');
+});
+
+document.getElementById('btn-paint-wallpaper').addEventListener('click', () => {
+  if (!selectedWallpaperTexture) { toast('Hãy upload và chọn một họa tiết trước', 'error'); return; }
+  if (paintMode === 'wallpaper') exitPaintMode();
+  else enterPaintMode('wallpaper');
+});
+
+// Mousemove → hover highlight wall
+canvas.addEventListener('mousemove', e => {
+  if (!paintMode) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+  const my = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+  raycaster.setFromCamera(new THREE.Vector2(mx, my), camera);
+
+  const allWalls = getAllWallMeshes();
+  const hits = raycaster.intersectObjects(allWalls);
+
+  if (hits.length) {
+    const mesh = hits[0].object;
+    if (mesh !== hoveredWall) {
+      clearWallHover();
+      hoveredWall = mesh;
+      hoveredOrigColor = mesh.material.color.getHex();
+      hoveredOrigMap   = mesh.material.map;
+      // Highlight: brighten the wall slightly
+      const col = new THREE.Color(hoveredOrigColor);
+      col.lerp(new THREE.Color(0xffffff), 0.28);
+      mesh.material.color.set(col);
+      mesh.material.needsUpdate = true;
+    }
+  } else {
+    clearWallHover();
+  }
+});
+
+// Click → paint; right-click → remove
+canvas.addEventListener('click', e => {
+  if (!paintMode) return;
+  if (!hoveredWall) return;
+  e.stopImmediatePropagation(); // prevent place/select mode from also firing
+  applyToWall(hoveredWall);
+  // Refresh hover origin so next hover is correct
+  hoveredOrigColor = hoveredWall.material.color.getHex();
+  hoveredOrigMap   = hoveredWall.material.map;
+}, true); // capture phase so it runs before the existing click handler
+
+canvas.addEventListener('contextmenu', e => {
+  if (!paintMode) return;
+  e.preventDefault();
+  if (!hoveredWall) return;
+  removeWallpaper(hoveredWall);
+  hoveredOrigColor = hoveredWall.material.color.getHex();
+  hoveredOrigMap   = null;
+  toast('Đã gỡ họa tiết ✓', 'info');
+});
+
+// Exit paint mode when switching to another mode
+document.getElementById('btn-walk').addEventListener('click', exitPaintMode, true);
+document.getElementById('btn-place').addEventListener('click', exitPaintMode, true);
+document.getElementById('btn-select').addEventListener('click', exitPaintMode, true);
+
+/* ══════════════════════════════════════
+   DOOR MODE — hover tường → click thêm cửa thông
+══════════════════════════════════════ */
+let doorMode = false;
+let doorHoveredWall = null;
+let doorHoverOrigColor = null;
+const doorTooltip = document.getElementById('door-tooltip');
+
+function enterDoorMode() {
+  doorMode = true;
+  exitPaintMode();
+  document.getElementById('btn-door-mode').classList.add('active');
+  toast('🚪 Di chuột vào tường → Click để tạo cửa · ESC để thoát', 'info', 4000);
+  // Custom cursor
+  document.getElementById('paint-cursor-style').textContent =
+    `#c { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E🚪%3C/text%3E%3C/svg%3E") 4 28, crosshair !important; }`;
+}
+
+function exitDoorMode() {
+  doorMode = false;
+  clearDoorHover();
+  document.getElementById('btn-door-mode').classList.remove('active');
+  document.getElementById('paint-cursor-style').textContent = '';
+  doorTooltip.classList.remove('show');
+}
+
+function clearDoorHover() {
+  if (doorHoveredWall) {
+    doorHoveredWall.material.color.set(doorHoverOrigColor);
+    doorHoveredWall.material.needsUpdate = true;
+    doorHoveredWall = null;
+    doorHoverOrigColor = null;
+  }
+}
+
+// Mousemove: highlight wall + show tooltip
+canvas.addEventListener('mousemove', e => {
+  if (!doorMode) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+  const my = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+  raycaster.setFromCamera(new THREE.Vector2(mx, my), camera);
+
+  const allWalls = getAllWallMeshes();
+  const hits = raycaster.intersectObjects(allWalls);
+
+  if (hits.length) {
+    const mesh = hits[0].object;
+    const dir = mesh.userData.wallDir;
+    const roomId = mesh.userData.roomId;
+    const room = rooms.find(r => r.id === roomId);
+
+    // Check if wall already has a door
+    const alreadyHasDoor = room && room.doors && room.doors.some(d => d.dir === dir);
+
+    if (mesh !== doorHoveredWall) {
+      clearDoorHover();
+      doorHoveredWall = mesh;
+      doorHoverOrigColor = mesh.material.color.getHex();
+      // Highlight orange
+      mesh.material.color.set(alreadyHasDoor ? 0xcc5555 : 0xd4a855);
+      mesh.material.needsUpdate = true;
+    }
+
+    // Move tooltip near cursor
+    doorTooltip.textContent = alreadyHasDoor
+      ? '✕ Cửa đã tồn tại ở tường này'
+      : `🚪 Click để tạo cửa thông (tường ${dir || '?'})`;
+    doorTooltip.style.left = (e.clientX + 14) + 'px';
+    doorTooltip.style.top  = (e.clientY - 10) + 'px';
+    doorTooltip.classList.add('show');
+  } else {
+    clearDoorHover();
+    doorTooltip.classList.remove('show');
+  }
+});
+
+// Click: add door on hovered wall
+canvas.addEventListener('click', e => {
+  if (!doorMode) return;
+  if (!doorHoveredWall) return;
+  e.stopImmediatePropagation();
+
+  const dir    = doorHoveredWall.userData.wallDir;
+  const roomId = doorHoveredWall.userData.roomId;
+  const room   = rooms.find(r => r.id === roomId);
+  if (!room || !dir) return;
+
+  if (room.doors && room.doors.some(d => d.dir === dir)) {
+    toast('Tường này đã có cửa rồi!', 'error'); return;
+  }
+
+  // Raycast to get exact hit point on wall → pass as doorCenter
+  const rect2 = canvas.getBoundingClientRect();
+  const mx2 = ((e.clientX - rect2.left) / rect2.width)  * 2 - 1;
+  const my2 = -((e.clientY - rect2.top)  / rect2.height) * 2 + 1;
+  raycaster.setFromCamera(new THREE.Vector2(mx2, my2), camera);
+  const hits = raycaster.intersectObject(doorHoveredWall);
+  let doorCenter;
+  if (hits.length) {
+    const pt = hits[0].point;
+    // For N/S walls the door slides along X; for W/E walls along Z
+    doorCenter = (dir === 'N' || dir === 'S') ? pt.x : pt.z;
+  }
+
+  addDoor(room, dir, doorCenter);
+
+  // Auto-mirror: tìm phòng kề sát tường này và đục cửa đối diện
+  const opposite = {N:'S', S:'N', E:'W', W:'E'};
+  const oppDir = opposite[dir];
+  const WALL_THICK = 0.6;
+  for (const other of rooms) {
+    if (other === room || other.floor !== room.floor) continue;
+    let adjacent = false;
+    if (dir === 'E' && Math.abs((room.x + room.w/2) - (other.x - other.w/2)) < WALL_THICK) adjacent = true;
+    if (dir === 'W' && Math.abs((room.x - room.w/2) - (other.x + other.w/2)) < WALL_THICK) adjacent = true;
+    if (dir === 'S' && Math.abs((room.z + room.d/2) - (other.z - other.d/2)) < WALL_THICK) adjacent = true;
+    if (dir === 'N' && Math.abs((room.z - room.d/2) - (other.z + other.d/2)) < WALL_THICK) adjacent = true;
+    if (!adjacent) continue;
+    // Chỉ tạo nếu chưa có cửa
+    if (other.doors && other.doors.some(d => d.dir === oppDir)) continue;
+    addDoor(other, oppDir, doorCenter);
+    toast(`✓ Đã tạo cửa thông "${room.name}" ↔ "${other.name}"`, 'success');
+    drawFloorPlan();
+    doorHoveredWall = null;
+    doorHoverOrigColor = null;
+    doorTooltip.classList.remove('show');
+    return;
+  }
+
+  drawFloorPlan();
+  toast(`✓ Đã tạo cửa tường ${dir} cho "${room.name}"`, 'success');
+
+  doorHoveredWall = null;
+  doorHoverOrigColor = null;
+  doorTooltip.classList.remove('show');
+}, true);
+
+document.getElementById('btn-door-mode').addEventListener('click', () => {
+  if (doorMode) exitDoorMode();
+  else enterDoorMode();
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && doorMode) exitDoorMode();
+});
+
+// Exit door mode when switching other modes
+document.getElementById('btn-walk').addEventListener('click', exitDoorMode, true);
+document.getElementById('btn-place').addEventListener('click', exitDoorMode, true);
+document.getElementById('btn-select').addEventListener('click', exitDoorMode, true);
+
+
+
+// Esc key to exit
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && paintMode) exitPaintMode();
+});
+
+// Apply to all walls (bulk)
+document.getElementById('ws-apply-color-all').addEventListener('click', () => {
+  const hex = document.getElementById('ws-wall-color').value;
+  let count = 0;
+  rooms.forEach(r => r.wallMeshes.forEach(m => {
+    m.material.map = null; m.material.color.set(hex); m.material.needsUpdate = true; count++;
+  }));
+  toast(`Đã sơn ${count} mặt tường ✓`, 'success');
+});
+
+// Upload wallpaper
+document.getElementById('fi-wallpaper').addEventListener('change', async function(e) {
+  for (const file of Array.from(e.target.files)) {
+    const localUrl = URL.createObjectURL(file);
+    // Upload lên Supabase Storage để lưu được sau F5
+    let storageUrl = null;
+    try {
+      const { url } = await uploadToStorage(file);
+      storageUrl = url;
+    } catch(err) {
+      toast('Upload wallpaper lỗi: ' + err.message, 'error');
+      storageUrl = localUrl; // fallback blob (sẽ mất sau F5)
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      const tex = new THREE.TextureLoader().load(storageUrl || localUrl);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      const repeat = parseInt(document.getElementById('ws-tile-repeat').value) || 4;
+      tex.repeat.set(repeat, repeat);
+      tex.userData = tex.userData || {};
+      tex.userData.storageUrl = storageUrl; // gắn URL để saveGallery đọc
+      const entry = { url: storageUrl || localUrl, img, texture: tex, name: file.name };
+      wallpaperImages.push(entry);
+
+      const preview = document.getElementById('ws-wallpaper-preview');
+      const wrap = document.createElement('div'); wrap.className = 'wallpaper-thumb-item';
+      const thumbEl = document.createElement('img'); thumbEl.src = localUrl; thumbEl.className = 'wallpaper-thumb';
+      thumbEl.title = file.name;
+      thumbEl.addEventListener('click', () => {
+        document.querySelectorAll('.wallpaper-thumb').forEach(t => t.classList.remove('sel'));
+        thumbEl.classList.add('sel');
+        selectedWallpaperTexture = tex;
+        toast('Đã chọn họa tiết: ' + file.name.substring(0,20), 'info');
+      });
+      const removeBtn = document.createElement('button'); removeBtn.className = 'wallpaper-remove'; removeBtn.innerHTML = '&#10005;';
+      removeBtn.title = 'Xoá khỏi danh sách';
+      removeBtn.addEventListener('click', ev => {
+        ev.stopPropagation();
+        wallpaperImages.splice(wallpaperImages.indexOf(entry), 1);
+        wrap.remove();
+        if (selectedWallpaperTexture === tex) selectedWallpaperTexture = null;
+        toast('Đã xoá họa tiết', 'info');
+      });
+      wrap.appendChild(thumbEl); wrap.appendChild(removeBtn);
+      preview.appendChild(wrap);
+
+      document.querySelectorAll('.wallpaper-thumb').forEach(t => t.classList.remove('sel'));
+      thumbEl.classList.add('sel');
+      selectedWallpaperTexture = tex;
+      toast('Đã tải: ' + file.name.substring(0,20), 'success');
+    };
+    img.src = localUrl;
+  }
+  this.value = '';
+});
+
+// Wallpaper bulk actions
+document.getElementById('ws-apply-wallpaper-all').addEventListener('click', () => {
+  if (!selectedWallpaperTexture) { toast('Hãy chọn một họa tiết trước', 'error'); return; }
+  const repeat = parseInt(document.getElementById('ws-tile-repeat').value) || 4;
+  const sUrl = selectedWallpaperTexture.userData && selectedWallpaperTexture.userData.storageUrl ? selectedWallpaperTexture.userData.storageUrl : null;
+  let count = 0;
+  rooms.forEach(r => r.wallMeshes.forEach(m => {
+    const t = selectedWallpaperTexture.clone();
+    t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(repeat, repeat); t.needsUpdate = true;
+    t.userData = t.userData || {}; t.userData.storageUrl = sUrl;
+    m.material.map = t; m.material.color.set(0xffffff); m.material.needsUpdate = true; count++;
+  }));
+  toast(`Đã dán họa tiết lên ${count} mặt tường ✓`, 'success');
+});
+
+document.getElementById('ws-remove-wallpaper-all').addEventListener('click', () => {
+  const hex = document.getElementById('ws-wall-color').value;
+  let count = 0;
+  rooms.forEach(r => r.wallMeshes.forEach(m => {
+    m.material.map = null; m.material.color.set(hex); m.material.needsUpdate = true; count++;
+  }));
+  toast(`Đã gỡ họa tiết ${count} tường ✓`, 'info');
+});
+
+// Floor color
+document.getElementById('ws-apply-floor').addEventListener('click', () => {
+  const hex = document.getElementById('ws-floor-color').value;
+  let count = 0;
+  rooms.forEach(r => {
+    r.meshes.forEach(m => {
+      if (m.geometry && m.geometry.type === 'PlaneGeometry' &&
+          Math.abs(m.rotation.x + Math.PI/2) < 0.1 && !m.userData.isFloor) {
+        m.material.color.set(hex); m.material.needsUpdate = true; count++;
+      }
+    });
+  });
+  toast(`Đã đổi màu ${count} sàn ✓`, 'success');
+});
+
+// Toggle wall style panel
+document.getElementById('btn-wall').addEventListener('click', () => {
+  const wp = document.getElementById('wall-style-panel');
+  wp.classList.toggle('open');
+  document.getElementById('btn-wall').classList.toggle('active', wp.classList.contains('open'));
+  document.getElementById('light-panel').classList.remove('open');
+  document.getElementById('btn-light').classList.remove('active');
+  document.getElementById('room-panel').classList.remove('open');
+  document.getElementById('btn-rooms').classList.remove('active');
+});
+
+/* ══════════════════════════════════════════════
+   PATH CREATOR — functions & event wiring
+══════════════════════════════════════════════ */
+let pathMapMode = false; // clicking floorplan adds waypoints
+
+/* WAYPOINT DISC HELPERS */
+function makeWaypointDiscTexture(num, hovered) {
+  var c2d = document.createElement('canvas');
+  c2d.width = 256; c2d.height = 256;
+  var ctx2 = c2d.getContext('2d');
+  var grd = ctx2.createRadialGradient(128,128,70,128,128,128);
+  grd.addColorStop(0, hovered ? 'rgba(255,220,130,.4)' : 'rgba(200,169,110,.2)');
+  grd.addColorStop(1, 'rgba(200,169,110,0)');
+  ctx2.fillStyle = grd;
+  ctx2.beginPath(); ctx2.arc(128,128,128,0,Math.PI*2); ctx2.fill();
+  var inner = ctx2.createRadialGradient(115,115,0,128,128,88);
+  inner.addColorStop(0, hovered ? 'rgba(255,235,155,.98)' : 'rgba(225,195,125,.9)');
+  inner.addColorStop(1, hovered ? 'rgba(200,155,75,.9)' : 'rgba(165,135,75,.78)');
+  ctx2.fillStyle = inner;
+  ctx2.beginPath(); ctx2.arc(128,128,88,0,Math.PI*2); ctx2.fill();
+  ctx2.strokeStyle = hovered ? 'rgba(255,255,210,.95)' : 'rgba(255,230,160,.72)';
+  ctx2.lineWidth = 8;
+  ctx2.beginPath(); ctx2.arc(128,128,88,0,Math.PI*2); ctx2.stroke();
+  ctx2.fillStyle = '#0f0d0a';
+  ctx2.font = 'bold ' + (num > 9 ? '58' : '66') + 'px sans-serif';
+  ctx2.textAlign = 'center'; ctx2.textBaseline = 'middle';
+  ctx2.fillText(String(num), 128, 134);
+  return new THREE.CanvasTexture(c2d);
+}
+
+function refreshDiscTexture(discMesh, hovered) {
+  discMesh.material.map = makeWaypointDiscTexture(discMesh.userData.waypointIdx + 1, hovered);
+  discMesh.material.needsUpdate = true;
+}
+
+function travelToWaypoint(idx) {
+  if (idx < 0 || idx >= pathWaypoints.length) return;
+  var wp = pathWaypoints[idx];
+  wpTravelFrom = { x: camera.position.x, y: camera.position.y, z: camera.position.z, yaw: yaw, pitch: pitch };
+  wpTravelTarget = { x: wp.x, y: wp.y, z: wp.z, yaw: wp.yaw || yaw, pitch: wp.pitch || 0 };
+  wpTravelT = 0;
+  var tip = document.getElementById('wp-nav-tip');
+  document.getElementById('wp-tip-num').textContent = String(idx + 1);
+  document.getElementById('wp-tip-label').textContent = wp.label || ('Diem ' + (idx + 1));
+  tip.classList.add('show');
+  setTimeout(function() { tip.classList.remove('show'); }, 2200);
+}
+
+function tickWpTravel() {
+  if (!wpTravelTarget) return;
+  wpTravelT += 0.035;
+  var et = wpTravelT < 1 ? wpTravelT * wpTravelT * (3 - 2 * wpTravelT) : 1;
+  camera.position.x = wpTravelFrom.x + (wpTravelTarget.x - wpTravelFrom.x) * et;
+  camera.position.y = wpTravelFrom.y + (wpTravelTarget.y - wpTravelFrom.y) * et;
+  camera.position.z = wpTravelFrom.z + (wpTravelTarget.z - wpTravelFrom.z) * et;
+  yaw   = lerpAngle(wpTravelFrom.yaw, wpTravelTarget.yaw, et);
+  pitch = wpTravelFrom.pitch + (wpTravelTarget.pitch - wpTravelFrom.pitch) * et;
+  if (wpTravelT >= 1) wpTravelTarget = null;
+}
+
+function addWaypoint(wx, wy, wz, wyaw, wpitch, label) {
+  var idx = pathWaypoints.length;
+  pathWaypoints.push({ x: wx, y: wy, z: wz, yaw: wyaw||0, pitch: wpitch||0, label: label||'' });
+
+  var floorY = wy - 1.65;
+  var discGeo = new THREE.CircleGeometry(0.55, 32);
+  var discMat = new THREE.MeshBasicMaterial({
+    map: makeWaypointDiscTexture(idx + 1, false),
+    transparent: true, depthWrite: false, side: THREE.DoubleSide
+  });
+  var disc = new THREE.Mesh(discGeo, discMat);
+  disc.rotation.x = -Math.PI / 2;
+  disc.position.set(wx, floorY + 0.012, wz);
+  disc.userData.waypointIdx = idx;
+  disc.userData.isWaypointDisc = true;
+  scene.add(disc);
+
+  var line = null;
+  if (idx > 0) {
+    var prev = pathWaypoints[idx - 1];
+    var pts = [
+      new THREE.Vector3(prev.x, prev.y - 1.65 + 0.015, prev.z),
+      new THREE.Vector3(wx, floorY + 0.015, wz)
+    ];
+    line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({ color: 0xc8a96e, transparent: true, opacity: 0.45 })
+    );
+    scene.add(line);
+  }
+
+  pathMarkers.push({ mesh: disc, sprite: null, line: line });
+
+  if (pathWaypoints.length === 1) {
+    var hint = document.getElementById('path-walk-hint');
+    hint.classList.add('show');
+    setTimeout(function() { hint.classList.remove('show'); }, 4000);
+  }
+
+  renderWaypointList();
+  toast('Da them diem ' + (idx + 1), 'success');
+}
+
+function removeWaypoint(idx) {
+  pathWaypoints.splice(idx, 1);
+  // Remove all markers and rebuild
+  pathMarkers.forEach(m => { scene.remove(m.mesh); if(m.sprite) scene.remove(m.sprite); if(m.line) scene.remove(m.line); });
+  pathMarkers.length = 0;
+  const copy = [...pathWaypoints];
+  pathWaypoints.length = 0;
+  copy.forEach(wp => addWaypoint(wp.x, wp.y, wp.z, wp.yaw, wp.pitch, wp.label));
+  renderWaypointList();
+}
+
+function clearWaypoints() {
+  pathMarkers.forEach(m => { scene.remove(m.mesh); if(m.sprite) scene.remove(m.sprite); if(m.line) scene.remove(m.line); });
+  pathMarkers.length = 0;
+  pathWaypoints.length = 0;
+  renderWaypointList();
+}
+
+function renderWaypointList() {
+  const list = document.getElementById('path-waypoints');
+  document.getElementById('wp-count').textContent = pathWaypoints.length;
+  list.innerHTML = '';
+  pathWaypoints.forEach((wp, i) => {
+    const item = document.createElement('div');
+    item.className = 'wp-item';
+    item.draggable = true;
+    item.dataset.idx = i;
+    item.innerHTML = `<span class="wp-index">${i+1}</span>
+      <span class="wp-coords" style="cursor:pointer" title="Click de di chuyen">(${wp.x.toFixed(1)}, ${wp.z.toFixed(1)})<br>${wp.label||''}</span>
+      <button class="wp-del" data-i="${i}">✕</button>`;
+    list.appendChild(item);
+  });
+  list.querySelectorAll('.wp-del').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); removeWaypoint(+btn.dataset.i); });
+  });
+  // Drag-to-reorder
+  let dragIdx = null;
+  list.querySelectorAll('.wp-item').forEach(item => {
+    item.addEventListener('dragstart', () => { dragIdx = +item.dataset.idx; item.style.opacity = '.4'; });
+    item.addEventListener('dragend',   () => { item.style.opacity = '1'; dragIdx = null; list.querySelectorAll('.wp-item').forEach(x => x.classList.remove('wp-drag-over')); });
+    item.addEventListener('dragover',  (e) => { e.preventDefault(); item.classList.add('wp-drag-over'); });
+    item.addEventListener('dragleave', () => item.classList.remove('wp-drag-over'));
+    item.addEventListener('drop', () => {
+      const targetIdx = +item.dataset.idx;
+      if (dragIdx === null || dragIdx === targetIdx) return;
+      const [moved] = pathWaypoints.splice(dragIdx, 1);
+      pathWaypoints.splice(targetIdx, 0, moved);
+      // rebuild markers
+      pathMarkers.forEach(m => { scene.remove(m.mesh); if(m.sprite) scene.remove(m.sprite); if(m.line) scene.remove(m.line); });
+      pathMarkers.length = 0;
+      const copy = [...pathWaypoints]; pathWaypoints.length = 0;
+      copy.forEach(wp => addWaypoint(wp.x, wp.y, wp.z, wp.yaw, wp.pitch, wp.label));
+    });
+  });
+}
+
+// Smooth interpolation (catmull-rom style using linear + lerp for now)
+function lerpAngle(a, b, t) {
+  let d = b - a;
+  while (d > Math.PI)  d -= Math.PI*2;
+  while (d < -Math.PI) d += Math.PI*2;
+  return a + d * t;
+}
+
+
+// Auto-generate path through all rooms
+function autoGeneratePath() {
+  clearWaypoints();
+  const floorRooms = rooms.filter(r => r.floor === 0);
+  if (floorRooms.length === 0) { toast('Không có phòng nào', 'error'); return; }
+  floorRooms.forEach(r => {
+    const fy = getFloorY(r.floor) + 1.7;
+    // Entry point of room
+    addWaypoint(r.x, fy, r.z + r.d/4, 0, 0, r.name + ' - Cửa vào');
+    // Center
+    addWaypoint(r.x, fy, r.z, 0, 0, r.name + ' - Trung tâm');
+    // Scan walls
+    addWaypoint(r.x - r.w/4, fy, r.z, Math.PI/2, 0, r.name + ' - Tường Tây');
+    addWaypoint(r.x + r.w/4, fy, r.z, -Math.PI/2, 0, r.name + ' - Tường Đông');
+  });
+  toast(`Tự tạo ${pathWaypoints.length} điểm qua ${floorRooms.length} phòng`, 'success');
+}
+
+// Path panel button wires
+document.getElementById('btn-path').addEventListener('click', () => {
+  const pp = document.getElementById('path-panel');
+  pp.classList.toggle('open');
+  document.getElementById('btn-path').classList.toggle('active', pp.classList.contains('open'));
+  // Close other panels
+  document.getElementById('light-panel').classList.remove('open');
+  document.getElementById('btn-light').classList.remove('active');
+  document.getElementById('room-panel').classList.remove('open');
+  document.getElementById('btn-rooms').classList.remove('active');
+  document.getElementById('wall-style-panel').classList.remove('open');
+  document.getElementById('btn-wall').classList.remove('active');
+});
+
+document.getElementById('pp-add-current').addEventListener('click', () => {
+  addWaypoint(camera.position.x, camera.position.y, camera.position.z, yaw, pitch, '');
+});
+
+
+document.getElementById('pp-clear').addEventListener('click', clearWaypoints);
+
+document.getElementById('pp-auto-gen').addEventListener('click', autoGeneratePath);
+
+/* ── PATH NAV BAR ── */
+let currentWpIdx = 0;
+
+function updatePathNavBar() {
+  var bar = document.getElementById('path-nav-bar');
+  if (pathWaypoints.length === 0) { bar.classList.remove('show'); return; }
+  bar.classList.add('show');
+  if (currentWpIdx >= pathWaypoints.length) currentWpIdx = pathWaypoints.length - 1;
+  if (currentWpIdx < 0) currentWpIdx = 0;
+  var wp = pathWaypoints[currentWpIdx];
+  document.getElementById('pnb-num').textContent = (currentWpIdx + 1) + ' / ' + pathWaypoints.length;
+  document.getElementById('pnb-label').textContent = wp.label || ('Diem ' + (currentWpIdx + 1));
+  document.getElementById('pnb-prev').disabled = (currentWpIdx <= 0);
+  document.getElementById('pnb-next').disabled = (currentWpIdx >= pathWaypoints.length - 1);
+}
+
+document.getElementById('pnb-prev').addEventListener('click', function() {
+  if (currentWpIdx > 0) { currentWpIdx--; travelToWaypoint(currentWpIdx); updatePathNavBar(); }
+});
+document.getElementById('pnb-next').addEventListener('click', function() {
+  if (currentWpIdx < pathWaypoints.length - 1) { currentWpIdx++; travelToWaypoint(currentWpIdx); updatePathNavBar(); }
+});
+document.getElementById('pnb-close').addEventListener('click', function() {
+  document.getElementById('path-nav-bar').classList.remove('show');
+});
+
+// Sync currentWpIdx khi bấm vào disc trên sàn
+canvas.addEventListener('click', function() {
+  if (wpHoveredDisc && mode === 'walk') {
+    var idx = wpHoveredDisc.userData.waypointIdx;
+    if (idx !== undefined) { currentWpIdx = idx; updatePathNavBar(); }
+  }
+}, true);
+
+// Cập nhật nav bar mỗi khi danh sách waypoint thay đổi (dùng MutationObserver)
+new MutationObserver(function() {
+  if (currentWpIdx >= pathWaypoints.length) currentWpIdx = Math.max(0, pathWaypoints.length - 1);
+  updatePathNavBar();
+}).observe(document.getElementById('path-waypoints'), { childList: true });
+
+// Khi thêm điểm hiện tại → chuyển focus về điểm mới
+document.getElementById('pp-add-current').addEventListener('click', function() {
+  setTimeout(function() { currentWpIdx = pathWaypoints.length - 1; updatePathNavBar(); }, 20);
+});
+
+// Khi auto-gen → reset về đầu
+document.getElementById('pp-auto-gen').addEventListener('click', function() {
+  setTimeout(function() { currentWpIdx = 0; updatePathNavBar(); }, 80);
+});
+
+// Click floorplan to add waypoint
+
+/* ── SAVE / LOAD ── */
+async function saveGallery() {
+  const statusEl=document.getElementById('save-status');
+  statusEl.textContent='Saving…'; statusEl.className='saving';
+  const galleryData={
+    artworks:artworks.map(a=>({x:a.group.position.x,y:a.group.position.y,z:a.group.position.z,ry:a.group.rotation.y,sx:a.group.scale.x,sy:a.group.scale.y,sz:a.group.scale.z,planeScaleX:a.plane.scale.x,builtinIdx:a.builtinIdx!==undefined?a.builtinIdx:null,storageUrl:a.storageUrl||null,isVideo:a.isVideo||false,meta:a.meta})),
+    models:models3d.map(m=>({x:m.object.position.x,y:m.object.position.y,z:m.object.position.z,sx:m.object.scale.x,sy:m.object.scale.y,sz:m.object.scale.z,storageUrl:m.storageUrl||null,name:m.name||null,meta:m.meta||{}})),
+    userSpots:userSpotlights.map(s=>({px:s.light.position.x,py:s.light.position.y,pz:s.light.position.z,tx:s.target.position.x,ty:s.target.position.y,tz:s.target.position.z,intensity:s.intensity,color:s.color})),
+    rooms:rooms.map(r=>({id:r.id,name:r.name,x:r.x,z:r.z,w:r.w,d:r.d,floor:r.floor,doors:r.doors||[]})),
+    pathWaypoints:pathWaypoints.map(wp=>({x:wp.x,y:wp.y,z:wp.z,yaw:wp.yaw||0,pitch:wp.pitch||0,label:wp.label||''})),
+    wallStyles:rooms.map(r=>({
+      roomId:r.id,
+      walls:r.wallMeshes.map(m=>({
+        dir:m.userData.wallDir,
+        color:'#'+m.material.color.getHexString(),
+        wallpaperUrl:m.material.map&&m.material.map.userData&&m.material.map.userData.storageUrl?m.material.map.userData.storageUrl:null,
+        wallpaperRepeat:m.material.map?[m.material.map.repeat.x,m.material.map.repeat.y]:null
+      })),
+      floors:r.meshes.filter(m=>m.geometry&&m.geometry.type==='PlaneGeometry'&&Math.abs(m.rotation.x+Math.PI/2)<0.1&&!m.userData.isFloor).map(m=>({
+        color:'#'+m.material.color.getHexString()
+      }))
+    }))
+  };
+  try {
+    await supabase.from("gallery").delete().eq("name",GALLERY_NAME);
+    const {error}=await supabase.from("gallery").insert([{name:GALLERY_NAME,scene_data:galleryData}]);
+    if(error){statusEl.textContent='Lỗi';statusEl.className='error';toast('Lưu lỗi: '+error.message,'error');}
+    else{statusEl.textContent='Saved ✓';statusEl.className='saved';toast('Đã lưu vào database ✓','success');setTimeout(()=>{statusEl.textContent='—';statusEl.className='';},4000);}
+  }catch(e){statusEl.textContent='Lỗi';statusEl.className='error';toast('Lỗi: '+e.message,'error');}
+}
+
+async function loadGallery() {
+  try {
+    const {data,error}=await supabase.from("gallery").select("*").eq("name",GALLERY_NAME).order("created_at",{ascending:false}).limit(1);
+    if(error||!data||data.length===0) return;
+    const sd=data[0].scene_data;
+
+    // ── BƯỚC 1: Rebuild rooms từ DB trước (xoá room mặc định, dựng lại đúng thứ tự) ──
+    if(sd.rooms&&sd.rooms.length>0){
+      // Xoá tất cả rooms hiện tại
+      rooms.forEach(r=>destroyRoom(r));
+      rooms.length=0;
+      // Rebuild từ data đã lưu, giữ nguyên id
+      sd.rooms.forEach(rd=>{
+        const r={
+          id:rd.id, name:rd.name, x:rd.x, z:rd.z, w:rd.w, d:rd.d,
+          floor:rd.floor||0, meshes:[], wallMeshes:[], doorMeshes:[], doors:rd.doors||[], spots:[]
+        };
+        rooms.push(r);
+        buildRoom(r);
+        // Thêm cửa lại
+        if(rd.doors&&rd.doors.length>0) rd.doors.forEach(door=>addDoor(r,door.dir,door.doorCenter));
+      });
+      // Đồng bộ roomIdCounter để không bị trùng id
+      roomIdCounter = Math.max(...rooms.map(r=>r.id)) + 1;
+
+      // ── Đảm bảo luôn có ít nhất 2 phòng ──
+      if(rooms.length < 2 && !rooms.find(r=>r.name==='Phòng 2')) {
+        const base = rooms[0];
+        createRoom('Phòng 2', base.x + base.w/2 + 8.1, base.z, 16, 16, base.floor||0);
+      }
+
+      activeRoomId = rooms[0].id;
+      renderRoomList();
+      renderRoomSwitcher();
+    }
+
+    // ── BƯỚC 2: Khôi phục màu tường + giấy dán (sau khi rooms đã có wallMeshes) ──
+    if(sd.wallStyles&&sd.wallStyles.length>0){
+      sd.wallStyles.forEach(ws=>{
+        const room=rooms.find(r=>r.id===ws.roomId);
+        if(!room) return;
+        if(ws.walls) ws.walls.forEach(wdata=>{
+          const mesh=room.wallMeshes.find(m=>m.userData.wallDir===wdata.dir);
+          if(!mesh) return;
+          if(wdata.wallpaperUrl){
+            const img=new Image(); img.crossOrigin='anonymous';
+            img.onload=()=>{
+              const tex=new THREE.Texture(img);
+              tex.wrapS=THREE.RepeatWrapping; tex.wrapT=THREE.RepeatWrapping;
+              if(wdata.wallpaperRepeat) tex.repeat.set(wdata.wallpaperRepeat[0],wdata.wallpaperRepeat[1]);
+              tex.needsUpdate=true;
+              mesh.material.map=tex; mesh.material.color.set(0xffffff); mesh.material.needsUpdate=true;
+            };
+            img.onerror=()=>{ mesh.material.map=null; mesh.material.color.set(wdata.color||'#d8d3ca'); mesh.material.needsUpdate=true; };
+            img.src=wdata.wallpaperUrl;
+          } else {
+            mesh.material.map=null; mesh.material.color.set(wdata.color||'#d8d3ca'); mesh.material.needsUpdate=true;
+          }
+        });
+        if(ws.floors&&ws.floors.length>0){
+          let fi=0;
+          room.meshes.forEach(m=>{
+            if(m.geometry&&m.geometry.type==='PlaneGeometry'&&Math.abs(m.rotation.x+Math.PI/2)<0.1&&!m.userData.isFloor){
+              if(ws.floors[fi]){m.material.color.set(ws.floors[fi].color);m.material.needsUpdate=true;}
+              fi++;
+            }
+          });
+        }
+      });
+    }
+
+    // ── BƯỚC 3: Artworks ──
+    artworks.forEach(a=>{scene.remove(a.group);scene.remove(a.light);scene.remove(a.tgt);}); artworks.length=0;
+    const wrap=document.getElementById('uw-img');
+    if(sd.artworks&&sd.artworks.length>0){
+      for(const a of sd.artworks){
+        const pos=new THREE.Vector3(a.x,a.y,a.z), rot=[0,a.ry||0,0];
+        const scaleVec=a.sx?new THREE.Vector3(a.sx,a.sy,a.sz):null, meta=a.meta||{};
+        if(a.storageUrl){
+          if(a.isVideo){ const vid=document.createElement('video');vid.src=a.storageUrl;vid.loop=true;vid.muted=true;vid.playsInline=true;vid.crossOrigin='anonymous';vid.addEventListener('loadeddata',()=>{const tex=new THREE.VideoTexture(vid);tex.minFilter=THREE.LinearFilter;const art=placeArtwork({type:'user',isVideo:true,texture:tex,videoEl:vid,storageUrl:a.storageUrl},pos,rot,meta,scaleVec);if(a.planeScaleX)art.plane.scale.x=a.planeScaleX;vid.play();});}
+          else{const src=await addImageFromUrl(a.storageUrl,a.storageUrl.split('/').pop(),wrap);if(src){const art=placeArtwork({...src,storageUrl:a.storageUrl},pos,rot,meta,scaleVec);if(a.planeScaleX)art.plane.scale.x=a.planeScaleX;}}
+        } else {const idx=Math.min(3,Math.max(0,parseInt(a.builtinIdx)||0));const art=placeArtwork({canvas:makeArtCanvas(idx),builtinIdx:idx},pos,rot,meta,scaleVec);if(a.planeScaleX)art.plane.scale.x=a.planeScaleX;}
+      }
+    }
+
+    // ── BƯỚC 4: 3D Models ──
+    if(sd.models&&sd.models.length>0){
+      for(const m of sd.models){
+        if(!m.storageUrl)continue;
+        const pos=new THREE.Vector3(m.x,m.y,m.z), ext=(m.name||m.storageUrl).split('.').pop().toLowerCase();
+        await new Promise(resolve=>{
+          const onLoad=(object)=>{
+            if(m.sx){ object.scale.set(m.sx,m.sy,m.sz); }
+            else { const box=new THREE.Box3().setFromObject(object); const size=box.getSize(new THREE.Vector3()); object.scale.setScalar(1.2/Math.max(size.x,size.y,size.z)); }
+            object.position.copy(pos); scene.add(object);
+            const pl=new THREE.PointLight(0xfff0dd,1.5,4); pl.position.set(pos.x,pos.y+2,pos.z); scene.add(pl);
+            const ped=makePedestal(new THREE.Vector3(pos.x,0,pos.z));
+            models3d.push({object,light:pl,pedestal:ped,storageUrl:m.storageUrl||null,name:m.name||null,meta:m.meta||{}});
+            resolve();
+          };
+          const onErr=(err)=>{console.error(err);resolve();};
+          if(ext==='glb'||ext==='gltf')gltfLoader.load(m.storageUrl,(gltf)=>onLoad(gltf.scene),null,onErr);
+          else if(ext==='obj')objLoader.load(m.storageUrl,(obj)=>{obj.traverse(c=>{if(c.isMesh)c.material=new THREE.MeshLambertMaterial({color:0xccbbaa});});onLoad(obj);},null,onErr);
+          else resolve();
+        });
+      }
+    }
+
+    // ── BƯỚC 5: Spotlights ──
+    if(sd.userSpots&&sd.userSpots.length>0) sd.userSpots.forEach(s=>addUserSpotlight(new THREE.Vector3(s.px,s.py,s.pz),new THREE.Vector3(s.tx,s.ty,s.tz),{intensity:s.intensity,color:s.color}));
+
+    // ── BƯỚC 6: Path waypoints ──
+    if(sd.pathWaypoints&&sd.pathWaypoints.length>0){
+      clearWaypoints();
+      sd.pathWaypoints.forEach(wp=>addWaypoint(wp.x,wp.y,wp.z,wp.yaw||0,wp.pitch||0,wp.label||''));
+      currentWpIdx=0; updatePathNavBar();
+    }
+
+    drawFloorPlan();
+    renderRoomSwitcher();
+    toast('Gallery đã được khôi phục ✓','success');
+  }catch(e){console.error('loadGallery error:',e); toast('Lỗi khôi phục: '+e.message,'error');}
+}
+
+document.getElementById('btn-save').addEventListener('click',saveGallery);
+loadGallery();
+
+/* ── CHAT ── */
+const CHAT_ROOM="room1";
+let username=localStorage.getItem("chat_username");
+if(!username||username.trim()===""){username=prompt("Nhập tên của bạn để vào phòng tranh:")||("Khách_"+Math.floor(Math.random()*900+100));localStorage.setItem("chat_username",username);}
+const chatMessages=document.getElementById("chat-messages"),chatInput=document.getElementById("chat-input"),chatSend=document.getElementById("chat-send"),chatBox=document.getElementById("chat-box"),chatToggle=document.getElementById("chat-toggle"),chatUnread=document.getElementById("chat-unread"),userDisplay=document.getElementById("chat-username-display");
+userDisplay.textContent=username;
+userDisplay.addEventListener("click",()=>{const n=prompt("Đổi tên:",username);if(n&&n.trim()){username=n.trim();localStorage.setItem("chat_username",username);userDisplay.textContent=username;}});
+let unreadCount=0;
+chatToggle.addEventListener("click",()=>{chatBox.classList.toggle("chat-hidden");if(!chatBox.classList.contains("chat-hidden")){unreadCount=0;chatUnread.textContent="";chatUnread.classList.remove("show");chatMessages.scrollTop=chatMessages.scrollHeight;}});
+function appendMsg(user,text,isMe){const div=document.createElement("div");div.className="chat-msg"+(isMe?" is-me":"");div.innerHTML=`<span class="msg-name">${user}</span><span class="msg-text">${text}</span>`;chatMessages.appendChild(div);chatMessages.scrollTop=chatMessages.scrollHeight;if(chatBox.classList.contains("chat-hidden")&&!isMe){unreadCount++;chatUnread.textContent=unreadCount>9?"9+":unreadCount;chatUnread.classList.add("show");}}
+async function loadOldMessages(){const{data,error}=await supabase.from("messages").select("*").eq("room",CHAT_ROOM).order("created_at",{ascending:true}).limit(50);if(error){appendMsg("System","⚠ Không tải được tin nhắn cũ.",false);return;}if(data&&data.length>0)data.forEach(msg=>appendMsg(msg.username,msg.content,msg.username===username));}
+loadOldMessages();
+const shownMsgIds=new Set();
+async function sendChat(){const text=chatInput.value.trim();if(!text)return;chatInput.value="";appendMsg(username,text,true);const{data,error}=await supabase.from("messages").insert({room:CHAT_ROOM,username,content:text}).select();if(error){toast("Gửi thất bại: "+error.message,"error");return;}if(data&&data[0]&&data[0].id)shownMsgIds.add(data[0].id);}
+chatSend.addEventListener("click",sendChat);
+chatInput.addEventListener("keydown",e=>{if(e.key==="Enter")sendChat();});
+const channel=supabase.channel("chat-room-v2").on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},({new:msg})=>{if(!msg||msg.room!==CHAT_ROOM)return;if(shownMsgIds.has(msg.id)){shownMsgIds.delete(msg.id);return;}appendMsg(msg.username,msg.content,msg.username===username);}).subscribe();
+
+/* ── Initial render of floor plan and room list ── */
+renderRoomList();
+renderRoomSwitcher();
+drawFloorPlan();
+
+})();
+</script>
+</body>
+</html>
