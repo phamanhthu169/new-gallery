@@ -1248,7 +1248,7 @@ const room0 = createRoom('Phòng chính', 0, 0, 16, 16, 0);
 activeRoomId = room0.id;
 
 // ── LOAD GLB ROOM MODEL ──
-// Đặt file office_room_1__black__.glb cùng thư mục với file HTML này.
+// Đặt file office room 1 (black).glb cùng thư mục với file HTML này.
 
 (function loadGlbRoom() {
   const lo = document.getElementById('loading-overlay');
@@ -1258,7 +1258,7 @@ activeRoomId = room0.id;
   lt.textContent = 'Đang tải phòng 3D...';
   lf.style.width = '10%';
 
-  const GLB_PATH = 'office_room_1__black__.glb';
+  const GLB_PATH = 'office room 1 (black).glb';
 
   gltfLoader.load(
     GLB_PATH,
